@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ========================================
+// SYSTEM / ADMIN USER
+// ========================================
+
+model User {
+  id             String @id
+  name           String
+  email          String @unique
+  password       String
+  role           String @default("user")
+  allowedModules String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ========================================
+// PROPERTY
+// ========================================
+
+model Property {
+  id      Int     @id @default(autoincrement())
+  code    String  @unique
+  name    String
+  address String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           PropertyUsers[]
+  propertyModules PropertyModule[]
+}
+
+// ========================================
+// MODULE MASTER
+// ========================================
+
+model Module {
+  id          Int     @id @default(autoincrement())
+  code        String  @unique
+  name        String
+  description String?
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  propertyModules PropertyModule[]
+}
+
+// ========================================
+// PROPERTY <-> MODULE
+// ========================================
+
+model PropertyModule {
+  id Int @id @default(autoincrement())
+
+  propertyId Int
+  moduleId   Int
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  module   Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  accountTypes AccountType[]
+  leadSources  LeadSource[]
+  leadSegments LeadSegment[]
+  businessSourceGroups BusinessSourceGroup[]
+
+  reservationTypes ReservationType[]
+  marketSegmentGroups MarketSegmentGroup[]
+  channelGroups ChannelGroup[]
+  cancellationRules CancellationRule[]
+  origins Origin[]
+
+  roomBlocks RoomBlock[]
+  roomFloors RoomFloor[]
+  roomFeatures RoomFeature[]
+  roomAmenities RoomAmenity[]
+  roomTypes RoomType[]
+
+  guestStatuses GuestStatus[]
+  designations Designations[]
+  documentTypes DocumentType[]
+  dislikeTypes DislikeType[]
+  membershipClasses MembershipClass[]
+  preferenceGroups PreferenceGroups[]
+  departments Departments[]
+  reasons Reasons[]
+  offers Offers[]
+  revenues Revenue[]
+  revenueGroups RevenueGroup[]
+  paymentInstructions PaymentInstructions[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([propertyId, moduleId])
+  @@index([propertyId])
+  @@index([moduleId])
+}
+
+// ========================================
+// PROPERTY USERS
+// ========================================
+
+model PropertyUsers {
+  id         Int @id @default(autoincrement())
+  propertyId Int
+
+  name     String
+  email    String   @unique
+  password String
+  role     UserRole @default(CLIENT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, email])
+  @@index([propertyId])
+}
+
+// ========================================
+// PROPERTY USER ROLE
+// ========================================
+
+enum UserRole {
+  CLIENT
+  PROPERTY_ADMIN
+}

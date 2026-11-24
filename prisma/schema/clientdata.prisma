@@ -1,0 +1,831 @@
+// FOM Data Collection Table
+
+// Business Source Groups
+
+model AccountType {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  code      String
+  name      String
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+
+  subAccountTypes SubAccountType[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+model SubAccountType {
+  id            Int @id @default(autoincrement())
+  accountTypeId Int
+
+  code      String
+  name      String
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  accountType AccountType @relation(fields: [accountTypeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([accountTypeId, code])
+  @@index([accountTypeId])
+}
+
+model LeadSource {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  code      String
+  name      String
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+model LeadSegment {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  code      String
+  name      String
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+// Reservation
+
+model ReservationType {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  code            String
+  name            String
+  group           ReservationTypeGroup
+  displaySequence Int                  @default(0)
+  isDefault       Boolean              @default(false)
+  isActive        Boolean              @default(true)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+enum ReservationTypeGroup {
+  WAITLIST
+  CONFIRM
+  TENTATIVE
+}
+
+
+model BusinessSourceGroup {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  code       String
+  name       String
+  isActive   Boolean @default(true)
+  sortOrder  Int @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId],references: [id],onDelete: Cascade)
+  
+  businessSources BusinessSource[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+model BusinessSource {
+  id                  Int @id @default(autoincrement())
+  businessSourceGroupId Int
+
+  code             String
+  name             String
+  displaySequence  Int    @default(0)
+
+  businessSourceGroup BusinessSourceGroup @relation(fields: [businessSourceGroupId],references: [id],onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([businessSourceGroupId, code])
+  @@index([businessSourceGroupId])
+}
+
+
+model MarketSegmentGroup {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  code String
+  name String
+
+  isActive Boolean @default(true)
+  sortOrder Int @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId],references: [id],onDelete: Cascade)
+  
+  marketSegments MarketSegment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+model MarketSegment {
+  id                   Int @id @default(autoincrement())
+  marketSegmentGroupId Int
+
+  code            String
+  name            String
+  displaySequence Int @default(0)
+  isActive        Boolean @default(true)
+
+  marketSegmentGroup MarketSegmentGroup @relation(fields: [marketSegmentGroupId],references: [id],onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([marketSegmentGroupId, code])
+  @@index([marketSegmentGroupId])
+}
+
+
+model ChannelGroup {
+  id Int @id @default(autoincrement())
+
+  propertyModuleId Int
+
+  code String
+  name String
+
+  isActive Boolean @default(true)
+  sortOrder Int @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId],references: [id],onDelete: Cascade)
+  
+  channels Channel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+model Channel {
+  id             Int @id @default(autoincrement())
+  channelGroupId Int
+
+  code            String
+  name            String
+  displaySequence Int @default(0)
+  isActive        Boolean @default(true)
+
+  channelGroup ChannelGroup @relation(fields: [channelGroupId],references: [id],onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([channelGroupId, code])
+  @@index([channelGroupId])
+}
+
+
+model Origin {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  code String
+  name String
+
+  isActive Boolean @default(true)
+  sortOrder Int @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId],references: [id],onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+
+model CancellationRule {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  code String
+  name String
+
+  type String
+  amount Decimal @default(0)
+
+  daysBeforeArrival Int @default(0)
+  displaySequence   Int @default(0)
+
+  cancelBeforeTime String?
+
+  isActive Boolean @default(true)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId],references: [id],onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+model RoomBlock {
+  id               Int  @id @default(autoincrement())
+  propertyModuleId Int
+
+  blockCode String
+  blockName String
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId],references: [id],onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, blockCode])
+  @@index([propertyModuleId])
+}
+
+
+model RoomFloor {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  floorCode String
+  floorName String
+
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId],references: [id],onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, floorCode])
+  @@index([propertyModuleId])
+}
+
+model RoomFeature {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  code      String
+  name      String
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId],references: [id],onDelete: Cascade)
+  
+  roomTypeFeatures RoomTypeFeature[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+model RoomAmenity {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  code      String
+  name      String
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+  sortOrder Int @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId],references: [id],onDelete: Cascade)
+  
+  roomTypeAmenities RoomTypeAmenity[]
+  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+enum RoomClassification {
+  ROOM
+  PSEUDO_ROOM
+  COMPONENT_ROOM
+}
+
+
+model RoomType {
+  id               Int @id @default(autoincrement())
+  propertyModuleId Int
+
+  classification String
+
+  code String
+  name String
+
+  upgradeLevel    Int
+  displaySequence Int
+
+  isDefault  Boolean @default(false)
+  description String?
+  overBooking Decimal @default(0)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId],references: [id],onDelete: Cascade)
+
+  roomTypeFeatures  RoomTypeFeature[]
+  roomTypeAmenities RoomTypeAmenity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@unique([propertyModuleId, name])
+  @@unique([propertyModuleId, upgradeLevel])
+  @@unique([propertyModuleId, displaySequence])
+
+  @@index([propertyModuleId])
+}
+
+model RoomTypeFeature {
+  roomTypeId    Int
+  roomFeatureId Int
+
+  roomType    RoomType    @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  roomFeature RoomFeature @relation(fields: [roomFeatureId], references: [id], onDelete: Cascade)
+
+  @@id([roomTypeId, roomFeatureId])
+  @@index([roomFeatureId])
+}
+
+
+model RoomTypeAmenity {
+  roomTypeId    Int
+  roomAmenityId Int
+
+  roomType    RoomType    @relation(fields: [roomTypeId], references: [id], onDelete: Cascade)
+  roomAmenity RoomAmenity @relation(fields: [roomAmenityId], references: [id], onDelete: Cascade)
+
+  @@id([roomTypeId, roomAmenityId])
+  @@index([roomAmenityId])
+}
+
+// CASHIERING
+
+enum RevenueClassifications{
+  Cash
+  CreditCard @map("Credit Card")
+  FrontOfficeCharge @map("Front Office Charge")
+  FAndBOutlet @map("F&B Outlet")
+  NonFAndBOutlet @map("NON F&B Outlet")
+  RoomRate @map("Room Rate")
+  Tax
+  MealPlan @map("Meal Plan")
+  LoyaltyRedemptions @map("Loyalty Redemptions")
+  GiftVoucher @map("Gift Voucher")
+}
+
+enum RevenueType{
+  Both
+  Debit
+  Credit
+}
+
+enum Sac_Hsn{
+  SAC
+  HSN
+}
+
+model Revenue {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+  classification   RevenueClassifications
+  type             RevenueType
+  Sac_Hsn          Sac_Hsn
+  sacHsnNumber     String   @default("")
+
+  displaySequence  Int      @default(0)
+  isDefault        Boolean  @default(false)
+  isActive         Boolean  @default(true)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+  revenueGroups  RevenueGroup[]
+  paymentInstructions PaymentInstructions[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+enum Group{
+  Accomodation
+  TransportRevenue @map("Transport Revenue")
+  ShopSales @map("Shop Sales")
+  FAndBFloorCode @map("F&B floorCode")
+  Tax
+}
+
+model RevenueGroup {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+  revenueGroupClassification Group
+  revenueName                Revenue[]
+  Sac_Hsn                    Sac_Hsn
+  sacHsnNumber               String   @default("")
+
+  isDefault        Boolean  @default(false)
+  isActive         Boolean  @default(true)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+  paymentInstructions PaymentInstructions[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+enum Payments{
+  Cash
+  CreditCard
+  Cityledger
+  Cheque
+}
+
+model PaymentInstructions {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+  nameMultilingual String
+  displaySequence  Int      @default(0)
+  description      String?
+  revenueGroups    RevenueGroup[]
+  revenueName      Revenue[]
+  split            Int      @default(0)
+  paymentType      Payments
+  transactionLimit Decimal? @db.Decimal(10, 2)
+  forcePayment     Boolean  @default(false)
+  
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+
+// GUEST
+
+
+enum GuestStatusGroup {
+  VVIP
+  VIP
+  OTHERS
+  HONEYMOON
+}
+
+model GuestStatus {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+  group            GuestStatusGroup
+  displaySequence  Int      @default(0)
+  isDefault        Boolean  @default(false)
+  isActive         Boolean  @default(true)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+enum DesignationsType {
+  Hotel
+  Guest
+}
+
+model Designations {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+  Type            DesignationsType
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+  departments   Departments[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+model DocumentType {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+  isDefault        Boolean  @default(false)
+  isActive         Boolean  @default(true)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+model PreferenceGroups {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+  preferences Preference[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+model Preference {
+  id                 Int @id @default(autoincrement())
+  preferenceGroupId  Int
+
+  code             String
+  name             String
+  displaySequence Int     @default(0)
+  isDefault        Boolean @default(false)
+
+  preferenceGroup PreferenceGroups @relation(fields: [preferenceGroupId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([preferenceGroupId, code])
+  @@index([preferenceGroupId])
+}
+
+
+model MembershipClass {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+  membershipTypes MembershipType[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+model MembershipType {
+  id                Int @id @default(autoincrement())
+  membershipClassId Int
+
+  code             String
+  name             String
+  displaySequence Int     @default(0)
+  isDefault        Boolean @default(false)
+
+  membershipClass MembershipClass @relation(fields: [membershipClassId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([membershipClassId, code])
+  @@index([membershipClassId])
+}
+
+
+model DislikeType {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+  displaySequence  Int      @default(0)
+  isDefault        Boolean  @default(false)
+  isActive         Boolean  @default(true)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+// MISCELLANEOUS
+
+enum DepartmentModules {
+  FrontOffice    @map("Front Office")
+  PointOfSale    @map("Point of Sale")
+  Housekeeping
+  SalesMarketing @map("Sales & Marketing")
+  Finance
+}
+
+
+model Departments {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+  designationId    Int
+
+  code             String
+  name             String
+  departmentModule DepartmentModules
+  isDefault        Boolean @default(false)
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+  designation    Designations @relation(fields: [designationId], references: [id], onDelete: Restrict)
+  sections       Sections[]
+  traceDefinitions TraceDefinitions[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+  @@index([designationId])
+}
+
+model Sections {
+  id           Int @id @default(autoincrement())
+  departmentId Int
+
+  code      String
+  name      String
+  isDefault Boolean @default(false)
+
+  department  Departments @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, code])
+  @@index([departmentId])
+}
+
+enum Operations {
+  CancelReservations @map("Cancel Reservations")
+  DeleteReservations @map("Delete Reservations")
+}
+
+model Reasons {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+  departmentModule DepartmentModules
+  operations Operations
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+model TraceDefinitions {
+  id           Int @id @default(autoincrement())
+  departmentId Int
+
+  code      String
+  name      String
+  isDefault Boolean @default(false)
+
+  department  Departments @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, code])
+  @@index([departmentId])
+}
+
+
+model Offers {
+  id               Int      @id @default(autoincrement())
+  propertyModuleId Int
+
+  code             String
+  name             String
+  description      String
+  startDate        DateTime
+  endDate          DateTime
+
+  propertyModule PropertyModule @relation(fields: [propertyModuleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([propertyModuleId, code])
+  @@index([propertyModuleId])
+}
+
+
+
+
+
+
+
+
+
