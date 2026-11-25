@@ -218,7 +218,7 @@ export async function POST(req: NextRequest) {
         !Number.isInteger(row.businessSourceGroupId) ||
         !groupIds.has(row.businessSourceGroupId) ||
         !Number.isInteger(row.displaySequence) ||
-        row.displaySequence < 0
+        row.displaySequence < 1
       )) {
         return NextResponse.json(
           { success: false, error: "Business source rows contain invalid group, code, name, or display sequence values." },
@@ -379,11 +379,21 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      if (code.length > 8) {
+        errors.push({ index, error: "Code cannot exceed 8 characters" });
+        continue;
+      }
+
       if (!name) {
         errors.push({
           index,
           error: "Name is required",
         });
+        continue;
+      }
+
+      if (name.length < 2) {
+        errors.push({ index, error: "Name must be at least 2 characters" });
         continue;
       }
 
@@ -415,7 +425,7 @@ export async function POST(req: NextRequest) {
 
       if (
         !Number.isInteger(displaySequence) ||
-        displaySequence < 0
+        displaySequence < 1
       ) {
         errors.push({
           index,

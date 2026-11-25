@@ -20,11 +20,14 @@ export type RowErrors = {
   displaySequence?: string;
 };
 
-export const emptyRow = (id: number): BusinessSource => ({
+export const emptyRow = (
+  id: number,
+  displaySequence = 1
+): BusinessSource => ({
   id,
   code: "",
   name: "",
   businessSourceGroupId: 0,
-  displaySequence: 0,
+  displaySequence,
   selected: false,
 });

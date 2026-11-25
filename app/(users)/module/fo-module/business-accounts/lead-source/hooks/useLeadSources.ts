@@ -158,6 +158,11 @@ export function useLeadSources() {
           "Code is required";
 
         isValid = false;
+      } else if (code.length > 8) {
+        rowErrors.code =
+          "Code cannot exceed 8 characters";
+
+        isValid = false;
       } else if (
         codeCounts[
           code.toLowerCase()
@@ -172,6 +177,11 @@ export function useLeadSources() {
       if (!name) {
         rowErrors.name =
           "Name is required";
+
+        isValid = false;
+      } else if (name.length < 2) {
+        rowErrors.name =
+          "Name must be at least 2 characters";
 
         isValid = false;
       } else if (
@@ -218,7 +228,7 @@ export function useLeadSources() {
           "Please fix all highlighted errors before saving."
         );
 
-        return;
+        return false;
       }
 
       try {
@@ -254,7 +264,7 @@ export function useLeadSources() {
               "Failed to save lead sources"
           );
 
-          return;
+          return false;
         }
 
         const saved: LeadSource[] =
@@ -275,12 +285,14 @@ export function useLeadSources() {
         alert(
           "Lead sources saved successfully!"
         );
+        return true;
       } catch (error) {
         console.error(error);
 
         alert(
           "Failed to save lead sources."
         );
+        return false;
       } finally {
         setIsSaving(false);
       }

@@ -336,6 +336,15 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      if (code.length > 8) {
+        errors.push({
+          index,
+          error: "Code cannot exceed 8 characters",
+        });
+
+        continue;
+      }
+
       /**
        * Name validation
        */
@@ -343,6 +352,15 @@ export async function POST(req: NextRequest) {
         errors.push({
           index,
           error: "Name is required",
+        });
+
+        continue;
+      }
+
+      if (name.length < 2) {
+        errors.push({
+          index,
+          error: "Name must be at least 2 characters",
         });
 
         continue;
@@ -602,6 +620,66 @@ export async function DELETE(req: NextRequest) {
           accountType: {
             propertyModuleId: propertyModule.id,
           },
+        },
+      });
+
+      return NextResponse.json({ success: true, count: result.count });
+    }
+
+    if (!req.nextUrl.searchParams.has("id")) {
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return NextResponse.json(
+          { success: false, error: "Request body must be valid JSON." },
+          { status: 400 }
+        );
+      }
+
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        !("ids" in body) ||
+        !Array.isArray(body.ids)
+      ) {
+        return NextResponse.json(
+          { success: false, error: "Provide sub account type IDs to delete." },
+          { status: 400 }
+        );
+      }
+
+      const ids = body.ids.map(Number);
+      if (
+        ids.length === 0 ||
+        ids.some((id) => !Number.isInteger(id) || id <= 0) ||
+        new Set(ids).size !== ids.length
+      ) {
+        return NextResponse.json(
+          { success: false, error: "Select valid sub account type rows to delete." },
+          { status: 400 }
+        );
+      }
+
+      const matchingRows = await prisma.subAccountType.findMany({
+        where: {
+          id: { in: ids },
+          accountType: { propertyModuleId: propertyModule.id },
+        },
+        select: { id: true },
+      });
+
+      if (matchingRows.length !== ids.length) {
+        return NextResponse.json(
+          { success: false, error: "One or more sub account types do not belong to this property." },
+          { status: 404 }
+        );
+      }
+
+      const result = await prisma.subAccountType.deleteMany({
+        where: {
+          id: { in: ids },
+          accountType: { propertyModuleId: propertyModule.id },
         },
       });
 

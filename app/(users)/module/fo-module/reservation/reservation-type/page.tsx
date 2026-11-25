@@ -4,6 +4,7 @@
 import ReservationTypeTable from "./components/ReservationTypeTable";
 
 import {
+  getNextDisplaySequence,
   ReservationType,
 } from "./type";
 
@@ -15,6 +16,11 @@ import {
   createDraftId,
   parseImportBoolean,
 } from "../../business-accounts/bulk-import-utils";
+import { pasteGridIntoRows } from "../../grid-paste-utils";
+import {
+  useDeleteSelectedReservationRows,
+  useReservationTableLock,
+} from "../hooks/useReservationTableActions";
 
 export default function ReservationTypePage() {
   const {
@@ -34,6 +40,15 @@ export default function ReservationTypePage() {
 
     save,
   } = useReservationTypes();
+  const { isLocked, unlock, saveAndLock } =
+    useReservationTableLock(isLoading, rows, save);
+  const { isDeleting, deleteSelectedRows } =
+    useDeleteSelectedReservationRows(
+      "/api/modules/fom/reservation-type",
+      "reservation type",
+      rows,
+      setRows
+    );
 
   // =====================================================
   // CHANGE ROW
@@ -64,16 +79,6 @@ export default function ReservationTypePage() {
   // =====================================================
 
   const addRow = () => {
-    const nextSequence =
-      rows.length > 0
-        ? Math.max(
-            ...rows.map(
-              (row) =>
-                row.displaySequence
-            )
-          ) + 1
-        : 1;
-
     setRows((previous) => [
       ...previous,
       {
@@ -83,10 +88,9 @@ export default function ReservationTypePage() {
 
         name: "",
 
-        group: "CONFIRM",
+        group: "",
 
-        displaySequence:
-          nextSequence,
+        displaySequence: getNextDisplaySequence(previous),
 
         isDefault: false,
 
@@ -97,22 +101,45 @@ export default function ReservationTypePage() {
 
   const importRows = (data: string[][]) => {
     const imported: ReservationType[] = [];
+    const usedSequences = new Set(
+      rows
+        .filter((row) => row.code.trim() || row.name.trim())
+        .map((row) => row.displaySequence)
+        .filter((sequence) => Number.isInteger(sequence) && sequence > 0)
+    );
+    const nextSequence = () => {
+      let sequence = 1;
+      while (usedSequences.has(sequence)) sequence++;
+      usedSequences.add(sequence);
+      return sequence;
+    };
 
     for (const [index, [code, name, groupValue, displaySequence, isDefault]] of data.entries()) {
       const group = (groupValue ?? "").trim().toUpperCase();
-      const validGroups = ["WAITLIST", "CONFIRM", "TENTATIVE"];
-      if (group && !validGroups.includes(group)) {
+      const validGroups = [
+        "WAITLIST",
+        "CONFIRM",
+        "TENTATIVE",
+      ] as const;
+      if (group && !validGroups.some((validGroup) => validGroup === group)) {
         return `Row ${index + 1}: Group must be Waitlist, Confirm, or Tentative.`;
+      }
+
+      const normalizedGroup =
+        validGroups.find((validGroup) => validGroup === group) ?? "";
+      const sequence = displaySequence?.trim()
+        ? Number(displaySequence)
+        : nextSequence();
+      if (Number.isInteger(sequence) && sequence > 0) {
+        usedSequences.add(sequence);
       }
 
       imported.push({
         id: createDraftId(),
         code: code ?? "",
         name: name ?? "",
-        group: (group || "CONFIRM") as ReservationType["group"],
-        displaySequence: displaySequence?.trim()
-          ? Number(displaySequence)
-          : rows.length + index,
+        group: normalizedGroup,
+        displaySequence: sequence,
         isDefault: parseImportBoolean(isDefault),
         selected: false,
       });
@@ -125,35 +152,77 @@ export default function ReservationTypePage() {
     setErrors({});
   };
 
-  const deleteAllRows = async () => {
-    const savedCount = rows.filter((row) => row.id > 0).length;
-    if (
-      savedCount === 0 ||
-      !window.confirm(`Permanently delete all ${savedCount} reservation types for this property?`)
-    ) return;
+  const pasteIntoGrid = (
+    startRow: number,
+    startField: string,
+    clipboardText: string
+  ) =>
+    pasteGridIntoRows<ReservationType>({
+      startRow,
+      startField,
+      clipboardText,
+      setRows,
+      columns: [
+        {
+          key: "code",
+          headers: ["Code", "Reservation Type Code"],
+          apply: (row, value) => ({ ...row, code: value }),
+        },
+        {
+          key: "name",
+          headers: ["Name", "Reservation Type Name"],
+          apply: (row, value) => ({ ...row, name: value }),
+        },
+        {
+          key: "group",
+          headers: ["Group", "Reservation Type Group"],
+          apply: (row, value) => {
+            if (!value.trim()) return { ...row, group: "" };
 
-    try {
-      const response = await fetch("/api/modules/fom/reservation-type?all=true", {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || "Could not delete all reservation types.");
-      setRows([{
+            const normalizedValue = value
+              .trim()
+              .replace(/[\s_-]/g, "")
+              .toLowerCase();
+            const groups: ReservationType["group"][] = [
+              "WAITLIST",
+              "CONFIRM",
+              "TENTATIVE",
+            ];
+            const group = groups.find(
+              (option) => option.toLowerCase() === normalizedValue
+            );
+            return group ? { ...row, group } : row;
+          },
+        },
+        {
+          key: "displaySequence",
+          headers: ["Display Sequence", "Sequence"],
+          apply: (row, value) => ({
+            ...row,
+            displaySequence: value.trim()
+              ? Number(value)
+              : row.displaySequence,
+          }),
+        },
+        {
+          key: "isDefault",
+          headers: ["Is Default", "Default"],
+          apply: (row, value) => ({
+            ...row,
+            isDefault: parseImportBoolean(value),
+          }),
+        },
+      ],
+      createRow: (existingRows) => ({
         id: createDraftId(),
         code: "",
         name: "",
-        group: "CONFIRM",
-        displaySequence: 0,
+        group: "",
+        displaySequence: getNextDisplaySequence(existingRows),
         isDefault: false,
         selected: false,
-      }]);
-      setErrors({});
-    } catch (error) {
-      console.error("Delete all reservation types failed:", error);
-      alert(error instanceof Error ? error.message : "Could not delete all reservation types.");
-    }
-  };
+      }),
+    });
 
   // =====================================================
   // REMOVE ROW
@@ -187,8 +256,8 @@ export default function ReservationTypePage() {
         id: createDraftId(),
         code: "",
         name: "",
-        group: "CONFIRM",
-        displaySequence: 0,
+        group: "",
+        displaySequence: getNextDisplaySequence(remaining),
         isDefault: false,
         selected: false,
       }];
@@ -231,9 +300,14 @@ export default function ReservationTypePage() {
           <BulkDataTools
             columns={["Code", "Name", "Group", "Display Sequence", "Is Default"]}
             templateName="reservation-types"
-            disabled={isLoading || isSaving}
-            deleteAllDisabled={!rows.some((row) => row.id > 0)}
-            onDeleteAll={deleteAllRows}
+            disabled={isLoading || isSaving || isDeleting}
+            importDisabled={isLocked}
+            instructions={[
+              "Code is required, unique, and cannot exceed 8 characters.",
+              "Name is required, unique, and must be at least 2 characters.",
+              "Group must be Waitlist, Confirm, or Tentative.",
+              "Keep the template column headers unchanged.",
+            ]}
             onImport={importRows}
           />
         </div>
@@ -251,13 +325,15 @@ export default function ReservationTypePage() {
         onChange={handleChange}
         onRemove={removeRow}
         onSelectAll={selectAll}
+        onPasteGrid={pasteIntoGrid}
+        isLocked={isLocked}
       />
 
       {/* =========================================
           FOOTER
       ========================================= */}
 
-      <div className="flex flex-wrap justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         {/* ADD ROW */}
 
         <button
@@ -265,7 +341,10 @@ export default function ReservationTypePage() {
           onClick={addRow}
           disabled={
             isLoading ||
-            propertyIdLoading
+            propertyIdLoading ||
+            isSaving ||
+            isDeleting ||
+            isLocked
           }
           className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -274,25 +353,34 @@ export default function ReservationTypePage() {
 
         {/* SAVE */}
 
-        <button
-          type="button"
-          onClick={save}
-          disabled={
-            isSaving ||
-            isLoading ||
-            propertyIdLoading ||
-            !propertyId
-          }
-          className="rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isSaving
-            ? "Saving..."
-            : propertyIdLoading
-              ? "Resolving property..."
-              : !propertyId
-                ? "No property selected"
-                : "Save Data"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void deleteSelectedRows()}
+            disabled={isLocked || isLoading || isSaving || isDeleting || !rows.some((row) => row.selected)}
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isDeleting ? "Deleting..." : "Delete selected"}
+          </button>
+          <button
+            type="button"
+            onClick={isLocked ? unlock : () => void saveAndLock()}
+            disabled={!isLocked && (isSaving || isLoading || propertyIdLoading || !propertyId || isDeleting)}
+            className={isLocked
+              ? "rounded-lg border border-slate-300 bg-white px-6 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              : "rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"}
+          >
+            {isLocked
+              ? "Edit"
+              : isSaving
+                ? "Saving..."
+                : propertyIdLoading
+                  ? "Resolving property..."
+                  : !propertyId
+                    ? "No property selected"
+                    : "Save Data"}
+          </button>
+        </div>
       </div>
     </div>
   );

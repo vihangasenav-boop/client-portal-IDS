@@ -21,12 +21,13 @@ export type RowErrors = {
 };
 
 export const emptyRow = (
-  id: number
+  id: number,
+  displaySequence = 1
 ): Channel => ({
   id,
   code: "",
   name: "",
   channelGroupId: 0,
-  displaySequence: 0,
+  displaySequence,
   selected: false,
 });

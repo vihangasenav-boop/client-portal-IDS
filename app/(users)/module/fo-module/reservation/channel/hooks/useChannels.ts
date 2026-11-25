@@ -282,6 +282,10 @@ export function useChannels() {
         rowErrors.code =
           "Code is required";
         isValid = false;
+      } else if (code.length > 8) {
+        rowErrors.code =
+          "Code cannot exceed 8 characters";
+        isValid = false;
       } else if (
         codeCounts[
           code.toLowerCase()
@@ -295,6 +299,10 @@ export function useChannels() {
       if (!name) {
         rowErrors.name =
           "Name is required";
+        isValid = false;
+      } else if (name.length < 2) {
+        rowErrors.name =
+          "Name must be at least 2 characters";
         isValid = false;
       } else if (
         nameCounts[
@@ -313,10 +321,11 @@ export function useChannels() {
       }
 
       if (
-        row.displaySequence < 0
+        !Number.isInteger(row.displaySequence) ||
+        row.displaySequence < 1
       ) {
         rowErrors.displaySequence =
-          "Display sequence cannot be negative";
+          "Display sequence must be greater than 0";
         isValid = false;
       }
 
@@ -344,7 +353,7 @@ export function useChannels() {
   const save = useCallback(async () => {
     if (!propertyId) {
       alert("No property selected.");
-      return;
+      return false;
     }
 
     const {
@@ -359,7 +368,7 @@ export function useChannels() {
         "Please fix all highlighted errors before saving."
       );
 
-      return;
+      return false;
     }
 
     try {
@@ -397,7 +406,7 @@ export function useChannels() {
             "Failed to save channels."
         );
 
-        return;
+        return false;
       }
 
       const saved: Channel[] =
@@ -420,12 +429,14 @@ export function useChannels() {
       alert(
         "Channels saved successfully!"
       );
+      return true;
     } catch (error) {
       console.error(error);
 
       alert(
         "Failed to save channels. Please try again."
       );
+      return false;
     } finally {
       setIsSaving(false);
     }

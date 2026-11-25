@@ -315,12 +315,22 @@ export async function POST(
         continue;
       }
 
+      if (code.length > 8) {
+        errors.push({ index, error: "Code cannot exceed 8 characters" });
+        continue;
+      }
+
       if (!name) {
         errors.push({
           index,
           error: "Name is required",
         });
 
+        continue;
+      }
+
+      if (name.length < 2) {
+        errors.push({ index, error: "Name must be at least 2 characters" });
         continue;
       }
 

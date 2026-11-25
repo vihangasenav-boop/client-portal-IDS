@@ -8,6 +8,14 @@ import { verifyToken } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
+const hasValue = (value: unknown) =>
+  value !== null &&
+  value !== undefined &&
+  String(value).trim() !== "";
+
+const isValidTime = (value: string | null) =>
+  value !== null && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+
 // ==========================================
 // Get FOM PropertyModule
 // ==========================================
@@ -267,8 +275,10 @@ export async function POST(
         code: String(row.code ?? "").trim(),
         name: String(row.name ?? "").trim(),
         type: String(row.type ?? "").trim(),
-        amount: Number(row.amount ?? 0),
-        daysBeforeArrival: Number(row.daysBeforeArrival ?? 0),
+        amount: hasValue(row.amount) ? Number(row.amount) : Number.NaN,
+        daysBeforeArrival: hasValue(row.daysBeforeArrival)
+          ? Number(row.daysBeforeArrival)
+          : Number.NaN,
         displaySequence: Number(row.displaySequence ?? 0),
         cancelBeforeTime: String(row.cancelBeforeTime ?? "").trim() || null,
       }));
@@ -278,11 +288,12 @@ export async function POST(
         !validTypes.has(row.type) ||
         !Number.isFinite(row.amount) ||
         row.amount < 0 ||
+        row.amount > 100 ||
         !Number.isInteger(row.daysBeforeArrival) ||
         row.daysBeforeArrival < 0 ||
         !Number.isInteger(row.displaySequence) ||
-        row.displaySequence < 0 ||
-        (row.cancelBeforeTime !== null && !/^([01]\d|2[0-3]):[0-5]\d$/.test(row.cancelBeforeTime))
+        row.displaySequence < 1 ||
+        !isValidTime(row.cancelBeforeTime)
       )) {
         return NextResponse.json(
           { success: false, error: "Cancellation rule rows contain invalid required fields." },
@@ -291,7 +302,7 @@ export async function POST(
       }
       const existingRows = await prisma.cancellationRule.findMany({
         where: { propertyModuleId: propertyModule.id },
-        select: { id: true, code: true },
+        select: { id: true, code: true, displaySequence: true },
       });
       const existingIds = new Set(existingRows.map((row) => row.id));
       const incomingIds = new Set(rows.flatMap((row) => row.id ? [row.id] : []));
@@ -305,6 +316,7 @@ export async function POST(
         );
       }
       const codes = new Set<string>();
+      const sequences = new Set<number>();
       for (const row of rows) {
         const code = row.code.toLowerCase();
         if (codes.has(code)) {
@@ -314,6 +326,13 @@ export async function POST(
           );
         }
         codes.add(code);
+        if (sequences.has(row.displaySequence)) {
+          return NextResponse.json(
+            { success: false, error: "Display sequences must be unique." },
+            { status: 409 }
+          );
+        }
+        sequences.add(row.displaySequence);
         if (existingRows.some((existing) =>
           existing.id !== row.id &&
           !incomingIds.has(existing.id) &&
@@ -321,6 +340,15 @@ export async function POST(
         )) {
           return NextResponse.json(
             { success: false, error: `Cancellation rule code "${row.code}" already exists.` },
+            { status: 409 }
+          );
+        }
+        if (existingRows.some((existing) =>
+          !incomingIds.has(existing.id) &&
+          existing.displaySequence === row.displaySequence
+        )) {
+          return NextResponse.json(
+            { success: false, error: "Display sequences must be unique." },
             { status: 409 }
           );
         }
@@ -396,6 +424,8 @@ export async function POST(
 
     const codeSet =
       new Set<string>();
+    const sequenceSet =
+      new Set<number>();
 
     for (
       let index = 0;
@@ -417,15 +447,13 @@ export async function POST(
         row.type ?? ""
       ).trim();
 
-      const amount = Number(
-        row.amount ?? 0
-      );
+      const amount = hasValue(row.amount)
+        ? Number(row.amount)
+        : Number.NaN;
 
-      const daysBeforeArrival =
-        Number(
-          row.daysBeforeArrival ??
-            0
-        );
+      const daysBeforeArrival = hasValue(row.daysBeforeArrival)
+        ? Number(row.daysBeforeArrival)
+        : Number.NaN;
 
       const displaySequence =
         Number(
@@ -442,12 +470,22 @@ export async function POST(
         continue;
       }
 
+      if (code.length > 8) {
+        errors.push({ index, error: "Code cannot exceed 8 characters" });
+        continue;
+      }
+
       if (!name) {
         errors.push({
           index,
           error:
             "Name is required",
         });
+        continue;
+      }
+
+      if (name.length < 2) {
+        errors.push({ index, error: "Name must be at least 2 characters" });
         continue;
       }
 
@@ -464,12 +502,13 @@ export async function POST(
 
       if (
         !Number.isFinite(amount) ||
-        amount < 0
+        amount < 0 ||
+        amount > 100
       ) {
         errors.push({
           index,
           error:
-            "Amount must be a valid positive number",
+            "Amount must be between 0 and 100 percent",
         });
         continue;
       }
@@ -492,15 +531,21 @@ export async function POST(
         !Number.isInteger(
           displaySequence
         ) ||
-        displaySequence < 0
+        displaySequence < 1
       ) {
         errors.push({
           index,
           error:
-            "Display Sequence must be a valid positive integer",
+            "Display Sequence must be a positive integer",
         });
         continue;
       }
+
+      if (sequenceSet.has(displaySequence)) {
+        errors.push({ index, error: "Display Sequence must be unique" });
+        continue;
+      }
+      sequenceSet.add(displaySequence);
 
       const normalizedCode =
         code.toLowerCase();
@@ -522,19 +567,14 @@ export async function POST(
         normalizedCode
       );
 
-      // Validate time if provided
-      if (
-        row.cancelBeforeTime &&
-        !/^\d{2}:\d{2}$/.test(
-          String(
-            row.cancelBeforeTime
-          )
-        )
-      ) {
+      const cancelBeforeTime = String(row.cancelBeforeTime ?? "").trim();
+      if (!cancelBeforeTime) {
+        errors.push({ index, error: "Cancel Before Time is required" });
+      } else if (!isValidTime(cancelBeforeTime)) {
         errors.push({
           index,
           error:
-            "Cancel Before Time must be in HH:mm format",
+            "Cancel Before Time must be a valid time",
         });
       }
     }
@@ -559,32 +599,18 @@ export async function POST(
 
     const codes =
       body.rows.map(
-        (row: any) =>
+        (row: Record<string, unknown>) =>
           String(
-            row.code
+            row.code ?? ""
           ).trim()
       );
 
-    const existing =
-      await prisma.cancellationRule.findMany(
-        {
-          where: {
-            propertyModuleId:
-              propertyModule.id,
+    const existing = await prisma.cancellationRule.findMany({
+      where: { propertyModuleId: propertyModule.id },
+      select: { id: true, code: true, displaySequence: true },
+    });
 
-            code: {
-              in: codes,
-            },
-          },
-
-          select: {
-            id: true,
-            code: true,
-          },
-        }
-      );
-
-    if (existing.length > 0) {
+    if (existing.some((row) => codes.some((code: string) => row.code.toLowerCase() === code.toLowerCase()))) {
       return NextResponse.json(
         {
           success: false,
@@ -597,6 +623,12 @@ export async function POST(
         }
       );
     }
+    if (existing.some((row) => sequenceSet.has(row.displaySequence))) {
+      return NextResponse.json(
+        { success: false, error: "Display sequences must be unique." },
+        { status: 409 }
+      );
+    }
 
     // ======================================
     // Create
@@ -605,44 +637,40 @@ export async function POST(
     await prisma.cancellationRule.createMany(
       {
         data: body.rows.map(
-          (row: any) => ({
+          (row: Record<string, unknown>) => ({
             propertyModuleId:
               propertyModule.id,
 
             code: String(
-              row.code
+              row.code ?? ""
             ).trim(),
 
             name: String(
-              row.name
+              row.name ?? ""
             ).trim(),
 
             type: String(
-              row.type
+              row.type ?? ""
             ).trim(),
 
             amount:
               Number(
-                row.amount ?? 0
+                row.amount
               ),
 
             daysBeforeArrival:
               Number(
-                row.daysBeforeArrival ??
-                  0
+                row.daysBeforeArrival
               ),
 
             displaySequence:
               Number(
-                row.displaySequence ??
-                  0
+                row.displaySequence
               ),
 
             cancelBeforeTime:
-              row.cancelBeforeTime
-                ? String(
-                    row.cancelBeforeTime
-                  )
+              hasValue(row.cancelBeforeTime)
+                ? String(row.cancelBeforeTime)
                 : null,
           })
         ),

@@ -6,6 +6,7 @@ import {
   ClipboardPaste,
   Download,
   FileSpreadsheet,
+  Info,
   Trash2,
   X,
 } from "lucide-react";
@@ -14,6 +15,8 @@ type Props = {
   columns: string[];
   templateName: string;
   disabled?: boolean;
+  importDisabled?: boolean;
+  instructions?: string[];
   deleteAllDisabled?: boolean;
   onDeleteAll?: () => void;
   deleteSelectedDisabled?: boolean;
@@ -92,6 +95,8 @@ export default function BulkDataTools({
   columns,
   templateName,
   disabled = false,
+  importDisabled = false,
+  instructions,
   deleteAllDisabled = false,
   onDeleteAll,
   deleteSelectedDisabled = false,
@@ -100,11 +105,17 @@ export default function BulkDataTools({
 }: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(false);
   const [pasteValue, setPasteValue] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   const importMatrix = (matrix: unknown[][]) => {
+    if (importDisabled) {
+      setError("Select Edit to unlock the table before importing.");
+      return;
+    }
+
     const rows = normalizeRows(matrix, columns);
 
     if (rows.length === 0) {
@@ -202,7 +213,7 @@ export default function BulkDataTools({
             setNotice("");
             setPasteOpen(true);
           }}
-          disabled={disabled}
+          disabled={disabled || importDisabled}
           className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ClipboardPaste size={16} />
@@ -211,7 +222,7 @@ export default function BulkDataTools({
         <button
           type="button"
           onClick={() => fileInput.current?.click()}
-          disabled={disabled}
+          disabled={disabled || importDisabled}
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <FileSpreadsheet size={16} />
@@ -226,6 +237,16 @@ export default function BulkDataTools({
           <Download size={16} />
           Download template
         </button>
+        {instructions && (
+          <button
+            type="button"
+            onClick={() => setInstructionsOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
+          >
+            <Info size={16} />
+            Instruction
+          </button>
+        )}
         {onDeleteSelected && (
           <button
             type="button"
@@ -259,6 +280,51 @@ export default function BulkDataTools({
 
       {notice && <p className="text-sm text-emerald-700">{notice}</p>}
       {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+
+      {instructionsOpen && instructions && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setInstructionsOpen(false);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="data-instructions-title"
+            className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <h2 id="data-instructions-title" className="text-lg font-semibold text-slate-900">
+                Instructions
+              </h2>
+              <button
+                type="button"
+                onClick={() => setInstructionsOpen(false)}
+                aria-label="Close instructions"
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <ul className="mt-4 list-disc space-y-2 pl-5 text-sm text-slate-600">
+              {instructions.map((instruction) => (
+                <li key={instruction}>{instruction}</li>
+              ))}
+            </ul>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setInstructionsOpen(false)}
+                className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {pasteOpen && (
         <div
@@ -314,7 +380,7 @@ export default function BulkDataTools({
               <button
                 type="button"
                 onClick={handlePasteImport}
-                disabled={!pasteValue.trim()}
+                disabled={!pasteValue.trim() || importDisabled}
                 className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Add to table

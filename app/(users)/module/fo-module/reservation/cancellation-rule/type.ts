@@ -1,4 +1,5 @@
 export type CancellationRuleType =
+  | ""
   | "Flat"
   | "Percentage"
   | "Arrival Night percentage"
@@ -10,8 +11,8 @@ export type CancellationRule = {
   code: string;
   name: string;
   type: CancellationRuleType;
-  amount: number;
-  daysBeforeArrival: number;
+  amount: number | null;
+  daysBeforeArrival: number | null;
   displaySequence: number;
   cancelBeforeTime: string;
   selected: boolean;
@@ -36,15 +37,29 @@ export const CANCELLATION_RULE_TYPES: CancellationRuleType[] = [
 ];
 
 export const emptyRow = (
-  id: number
+  id: number,
+  displaySequence = 1
 ): CancellationRule => ({
   id,
   code: "",
   name: "",
-  type: "Flat",
-  amount: 0,
-  daysBeforeArrival: 0,
-  displaySequence: 0,
+  type: "",
+  amount: null,
+  daysBeforeArrival: null,
+  displaySequence,
   cancelBeforeTime: "",
   selected: false,
 });
+
+export function getNextDisplaySequence(
+  rows: Pick<CancellationRule, "displaySequence">[]
+) {
+  const usedSequences = new Set(
+    rows
+      .map((row) => row.displaySequence)
+      .filter((sequence) => Number.isInteger(sequence) && sequence > 0)
+  );
+  let nextSequence = 1;
+  while (usedSequences.has(nextSequence)) nextSequence++;
+  return nextSequence;
+}

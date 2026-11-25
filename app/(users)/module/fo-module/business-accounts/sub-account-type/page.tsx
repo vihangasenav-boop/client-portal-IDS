@@ -1,12 +1,17 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import BulkDataTools from "../components/BulkDataTools";
 import { createDraftId, parseImportBoolean } from "../bulk-import-utils";
+import { pasteGridIntoRows } from "../../grid-paste-utils";
 import SubAccountTypeTable from "./components/SubAccountTypeTable";
 import { useSubAccountTypes } from "./hooks/useSubAccountTypes";
 import { SubAccountType } from "./type";
 
 export default function SubAccountTypePage() {
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+  const [isTableLocked, setIsTableLocked] = useState(false);
+  const initialLoadHandled = useRef(false);
   const {
     rows,
     setRows,
@@ -19,6 +24,25 @@ export default function SubAccountTypePage() {
     loadError,
     save,
   } = useSubAccountTypes();
+
+  useEffect(() => {
+    if (isLoading || initialLoadHandled.current) return;
+
+    const timeoutId = window.setTimeout(() => {
+      initialLoadHandled.current = true;
+      if (rows.some((row) => row.id > 0)) {
+        setIsTableLocked(true);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isLoading, rows]);
+
+  const handleSave = async () => {
+    if (await save()) {
+      setIsTableLocked(true);
+    }
+  };
 
   // ==========================================
   // Change row
@@ -86,41 +110,65 @@ export default function SubAccountTypePage() {
     ]);
   };
 
-  const deleteAllRows = async () => {
-    const savedCount = rows.filter((row) => row.id > 0).length;
-    if (
-      savedCount === 0 ||
-      !window.confirm(
-        `Permanently delete all ${savedCount} sub account types for this property? This cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        "/api/modules/fom/sub-account-type?all=true",
-        { method: "DELETE", credentials: "include" }
-      );
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || "Could not delete all sub account types.");
-      }
-
-      setRows([{
+  const pasteIntoGrid = (
+    startRow: number,
+    startField: string,
+    clipboardText: string
+  ) =>
+    pasteGridIntoRows({
+      startRow,
+      startField,
+      clipboardText,
+      setRows,
+      columns: [
+        {
+          key: "code",
+          headers: ["Code", "Sub Account Type Code"],
+          apply: (row, value) => ({ ...row, code: value }),
+        },
+        {
+          key: "name",
+          headers: ["Name", "Sub Account Type Name"],
+          apply: (row, value) => ({ ...row, name: value }),
+        },
+        {
+          key: "accountTypeId",
+          headers: [
+            "Account Type",
+            "Account Type Code",
+            "Account Type Name",
+          ],
+          apply: (row, value) => {
+            const normalizedValue = value.trim().toLowerCase();
+            const accountType = accountTypes.find(
+              (option) =>
+                option.code.trim().toLowerCase() === normalizedValue ||
+                option.name.trim().toLowerCase() === normalizedValue
+            );
+            return {
+              ...row,
+              accountTypeId: accountType?.id ?? 0,
+            };
+          },
+        },
+        {
+          key: "isDefault",
+          headers: ["Is Default", "Default"],
+          apply: (row, value) => ({
+            ...row,
+            isDefault: parseImportBoolean(value),
+          }),
+        },
+      ],
+      createRow: () => ({
         id: createDraftId(),
         code: "",
         name: "",
         accountTypeId: 0,
         isDefault: false,
         selected: false,
-      }]);
-    } catch (error) {
-      console.error("Delete all sub account types failed:", error);
-      alert(error instanceof Error ? error.message : "Could not delete all sub account types.");
-    }
-  };
+      }),
+    });
 
   // ==========================================
   // Remove row
@@ -173,6 +221,41 @@ export default function SubAccountTypePage() {
     );
   };
 
+  const deleteSelectedRows = async () => {
+    const selectedRows = rows.filter((row) => row.selected);
+    if (selectedRows.length === 0) return;
+
+    if (!window.confirm(`Delete ${selectedRows.length} selected sub account type row(s)?`)) {
+      return;
+    }
+
+    const savedIds = selectedRows.flatMap((row) => row.id > 0 ? [row.id] : []);
+    const selectedIds = new Set(selectedRows.map((row) => row.id));
+    setIsDeletingSelected(true);
+
+    try {
+      if (savedIds.length > 0) {
+        const response = await fetch("/api/modules/fom/sub-account-type", {
+          method: "DELETE",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: savedIds }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || "Could not delete selected sub account types.");
+        }
+      }
+
+      setRows((previous) => previous.filter((row) => !selectedIds.has(row.id)));
+    } catch (error) {
+      console.error("Delete selected sub account types failed:", error);
+      alert(error instanceof Error ? error.message : "Could not delete selected sub account types.");
+    } finally {
+      setIsDeletingSelected(false);
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
 
@@ -193,9 +276,14 @@ export default function SubAccountTypePage() {
           <BulkDataTools
             columns={["Code", "Name", "Account Type Code", "Is Default"]}
             templateName="sub-account-types"
-            disabled={isLoading || isSaving || accountTypes.length === 0}
-            deleteAllDisabled={!rows.some((row) => row.id > 0)}
-            onDeleteAll={deleteAllRows}
+            disabled={isLoading || isSaving || isDeletingSelected}
+            importDisabled={isTableLocked || accountTypes.length === 0}
+            instructions={[
+              "Code is required, must be unique for its account type, and cannot exceed 8 characters.",
+              "Name is required and must be at least 2 characters.",
+              "Use an existing Account Type Code and Yes or No for Is Default.",
+              "Keep the template column headers unchanged when importing.",
+            ]}
             onImport={importRows}
           />
         </div>
@@ -223,44 +311,79 @@ export default function SubAccountTypePage() {
         onChange={handleChange}
         onRemove={removeRow}
         onSelectAll={selectAll}
+        onPasteGrid={pasteIntoGrid}
+        isLocked={isTableLocked}
       />
 
       {/* Footer */}
-      <div className="flex flex-wrap justify-between gap-3">
-
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={addRow}
           disabled={
-            accountTypes.length === 0
+            accountTypes.length === 0 ||
+            isTableLocked ||
+            isLoading ||
+            isSaving ||
+            isDeletingSelected
           }
           className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           + Add Row
         </button>
 
-        <button
-          type="button"
-          onClick={save}
-          disabled={
-            isSaving ||
-            isLoading ||
-            propertyIdLoading ||
-            !propertyId ||
-            accountTypes.length === 0
-          }
-          className="rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
-        >
-          {isSaving
-            ? "Saving..."
-            : propertyIdLoading
-              ? "Resolving property..."
-              : !propertyId
-                ? "No property selected"
-                : accountTypes.length === 0
-                  ? "Create Account Type First"
-                  : "Save Data"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void deleteSelectedRows()}
+            disabled={
+              isLoading ||
+              isSaving ||
+              isDeletingSelected ||
+              isTableLocked ||
+              !rows.some((row) => row.selected)
+            }
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isDeletingSelected ? "Deleting..." : "Delete selected"}
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              isTableLocked
+                ? () => setIsTableLocked(false)
+                : () => void handleSave()
+            }
+            disabled={
+              isTableLocked
+                ? false
+                : isSaving ||
+                  isDeletingSelected ||
+                  isLoading ||
+                  propertyIdLoading ||
+                  !propertyId ||
+                  accountTypes.length === 0
+            }
+            className={
+              isTableLocked
+                ? "rounded-lg border border-slate-300 bg-white px-6 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                : "rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
+            }
+          >
+            {isTableLocked
+              ? "Edit"
+              : isSaving
+                ? "Saving..."
+                : propertyIdLoading
+                  ? "Resolving property..."
+                  : !propertyId
+                    ? "No property selected"
+                    : accountTypes.length === 0
+                      ? "Create Account Type First"
+                      : "Save Data"}
+          </button>
+        </div>
 
       </div>
     </div>

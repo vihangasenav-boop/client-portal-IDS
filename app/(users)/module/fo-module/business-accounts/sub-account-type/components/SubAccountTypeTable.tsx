@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Trash2 } from "lucide-react";
+import { handleGridPasteEvent } from "../../../grid-paste-utils";
 import {
   SubAccountType,
   AccountTypeOption,
@@ -13,6 +14,7 @@ type Props = {
   accountTypes: AccountTypeOption[];
   errors: Record<number, RowErrors>;
   isLoading: boolean;
+  isLocked: boolean;
 
   onChange: (
     id: number,
@@ -23,6 +25,11 @@ type Props = {
   onRemove: (id: number) => void;
 
   onSelectAll: (checked: boolean) => void;
+  onPasteGrid: (
+    startRow: number,
+    startField: string,
+    clipboardText: string
+  ) => boolean;
 };
 
 export default function SubAccountTypeTable({
@@ -30,19 +37,27 @@ export default function SubAccountTypeTable({
   accountTypes,
   errors,
   isLoading,
+  isLocked,
   onChange,
   onRemove,
   onSelectAll,
+  onPasteGrid,
 }: Props) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table className="w-full border-separate border-spacing-0 text-sm text-black">
+      <table
+        className="w-full border-separate border-spacing-0 text-sm text-black"
+        onPaste={(event) =>
+          handleGridPasteEvent(event, isLocked, onPasteGrid)
+        }
+      >
         <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
           <tr>
             <th className="w-10 border-b border-slate-200 px-3 py-3">
               <input
                 type="checkbox"
                 className="h-4 w-4"
+                disabled={isLocked}
                 onChange={(e) =>
                   onSelectAll(e.target.checked)
                 }
@@ -104,6 +119,7 @@ export default function SubAccountTypeTable({
                     <input
                       type="checkbox"
                       checked={row.selected}
+                      disabled={isLocked}
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -132,6 +148,10 @@ export default function SubAccountTypeTable({
                       type="text"
                       value={row.code}
                       title={codeError || ""}
+                      maxLength={8}
+                      readOnly={isLocked}
+                      data-grid-row={index}
+                      data-grid-field="code"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -139,7 +159,7 @@ export default function SubAccountTypeTable({
                           e.target.value
                         )
                       }
-                      className="min-h-[44px] w-full bg-transparent px-3 py-2 text-black outline-none transition focus:bg-white focus:ring-2 focus:ring-inset focus:ring-orange-400"
+                      className="min-h-[44px] w-full bg-transparent px-3 py-2 text-black outline-none transition focus:bg-white focus:ring-2 focus:ring-inset focus:ring-orange-400 read-only:bg-slate-50/70 read-only:text-slate-600"
                     />
                     {codeError && (
                       <p className="px-3 pb-2 text-xs text-red-600">
@@ -160,6 +180,10 @@ export default function SubAccountTypeTable({
                       type="text"
                       value={row.name}
                       title={nameError || ""}
+                      minLength={2}
+                      readOnly={isLocked}
+                      data-grid-row={index}
+                      data-grid-field="name"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -167,7 +191,7 @@ export default function SubAccountTypeTable({
                           e.target.value
                         )
                       }
-                      className="min-h-[44px] w-full bg-transparent px-3 py-2 text-black outline-none transition focus:bg-white focus:ring-2 focus:ring-inset focus:ring-orange-400"
+                      className="min-h-[44px] w-full bg-transparent px-3 py-2 text-black outline-none transition focus:bg-white focus:ring-2 focus:ring-inset focus:ring-orange-400 read-only:bg-slate-50/70 read-only:text-slate-600"
                     />
                     {nameError && (
                       <p className="px-3 pb-2 text-xs text-red-600">
@@ -191,6 +215,9 @@ export default function SubAccountTypeTable({
                       title={
                         accountTypeError || ""
                       }
+                      disabled={isLocked}
+                      data-grid-row={index}
+                      data-grid-field="accountTypeId"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -210,7 +237,6 @@ export default function SubAccountTypeTable({
                             key={accountType.id}
                             value={accountType.id}
                           >
-                            {accountType.code} -{" "}
                             {accountType.name}
                           </option>
                         )
@@ -231,6 +257,9 @@ export default function SubAccountTypeTable({
                           ? "Yes"
                           : "No"
                       }
+                      disabled={isLocked}
+                      data-grid-row={index}
+                      data-grid-field="isDefault"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -257,9 +286,10 @@ export default function SubAccountTypeTable({
                       onClick={() =>
                         onRemove(row.id)
                       }
+                      disabled={isLocked}
                       aria-label={`Delete ${row.name || "sub account type"} row`}
                       title="Delete row"
-                      className="rounded-md p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                      className="rounded-md p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Trash2 size={16} />
                     </button>

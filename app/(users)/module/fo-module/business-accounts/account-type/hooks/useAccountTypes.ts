@@ -192,6 +192,9 @@ export function useAccountTypes() {
             if (!code) {
                 rowErrors.code = "Code is required";
                 isValid = false;
+            } else if (code.length > 8) {
+                rowErrors.code = "Code cannot exceed 8 characters";
+                isValid = false;
             } else if (
                 codeCounts[code.toLowerCase()] > 1
             ) {
@@ -201,6 +204,9 @@ export function useAccountTypes() {
 
             if (!name) {
                 rowErrors.name = "Name is required";
+                isValid = false;
+            } else if (name.length < 2) {
+                rowErrors.name = "Name must be at least 2 characters";
                 isValid = false;
             } else if (
                 nameCounts[name.toLowerCase()] > 1
@@ -230,7 +236,7 @@ export function useAccountTypes() {
     const save = useCallback(async () => {
         if (!propertyId) {
             alert("No property selected.");
-            return;
+            return false;
         }
 
         const {
@@ -245,7 +251,7 @@ export function useAccountTypes() {
                 "Please fix all highlighted errors before saving."
             );
 
-            return;
+            return false;
         }
 
         try {
@@ -278,7 +284,7 @@ export function useAccountTypes() {
                     "Failed to save data."
                 );
 
-                return;
+                return false;
             }
 
             const saved: AccountType[] =
@@ -296,11 +302,13 @@ export function useAccountTypes() {
             setErrors({});
 
             alert("Data saved successfully!");
+            return true;
         } catch (error) {
             console.error(error);
             alert(
                 "Failed to save data. Please try again."
             );
+            return false;
         } finally {
             setIsSaving(false);
         }

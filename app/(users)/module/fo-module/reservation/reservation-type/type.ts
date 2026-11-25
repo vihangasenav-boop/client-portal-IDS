@@ -1,4 +1,5 @@
 export type ReservationTypeGroup =
+  | ""
   | "WAITLIST"
   | "CONFIRM"
   | "TENTATIVE";
@@ -21,13 +22,29 @@ export type RowErrors = {
 };
 
 export const emptyRow = (
-  id: number
+  id: number,
+  displaySequence = 1
 ): ReservationType => ({
   id,
   code: "",
   name: "",
-  group: "CONFIRM",
-  displaySequence: 0,
+  group: "",
+  displaySequence,
   isDefault: false,
   selected: false,
 });
+
+export function getNextDisplaySequence(
+  rows: Pick<ReservationType, "displaySequence">[]
+) {
+  const usedSequences = new Set(
+    rows
+      .map((row) => row.displaySequence)
+      .filter((sequence) => Number.isInteger(sequence) && sequence > 0)
+  );
+  let nextSequence = 1;
+  while (usedSequences.has(nextSequence)) {
+    nextSequence++;
+  }
+  return nextSequence;
+}

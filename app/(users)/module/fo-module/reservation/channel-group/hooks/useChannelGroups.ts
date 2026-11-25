@@ -239,6 +239,11 @@ export function useChannelGroups() {
           "Code is required";
 
         isValid = false;
+      } else if (code.length > 8) {
+        rowErrors.code =
+          "Code cannot exceed 8 characters";
+
+        isValid = false;
       } else if (
         codeCounts[
           code.toLowerCase()
@@ -253,6 +258,11 @@ export function useChannelGroups() {
       if (!name) {
         rowErrors.name =
           "Name is required";
+
+        isValid = false;
+      } else if (name.length < 2) {
+        rowErrors.name =
+          "Name must be at least 2 characters";
 
         isValid = false;
       } else if (
@@ -291,7 +301,8 @@ export function useChannelGroups() {
         alert(
           "No property selected."
         );
-        return;
+
+        return false;
       }
 
       const {
@@ -307,7 +318,7 @@ export function useChannelGroups() {
           "Please fix all highlighted errors before saving."
         );
 
-        return;
+        return false;
       }
 
       try {
@@ -342,7 +353,7 @@ export function useChannelGroups() {
             data?.error ||
               "Failed to save data."
           );
-          return;
+          return false;
         }
 
         const saved: ChannelGroup[] =
@@ -364,12 +375,14 @@ export function useChannelGroups() {
         alert(
           "Channel groups saved successfully!"
         );
+        return true;
       } catch (error) {
         console.error(error);
 
         alert(
           "Failed to save data. Please try again."
         );
+        return false;
       } finally {
         setIsSaving(false);
       }

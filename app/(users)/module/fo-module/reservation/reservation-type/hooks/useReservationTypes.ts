@@ -25,9 +25,9 @@ export function useReservationTypes() {
   const [rows, setRows] = useState<
     ReservationType[]
   >([
-    emptyRow(createDraftId()),
-    emptyRow(createDraftId()),
-    emptyRow(createDraftId()),
+    emptyRow(createDraftId(), 1),
+    emptyRow(createDraftId(), 2),
+    emptyRow(createDraftId(), 3),
   ]);
 
   const [isLoading, setIsLoading] =
@@ -223,6 +223,8 @@ export function useReservationTypes() {
       number
     > = {};
 
+    const sequenceCounts = new Map<number, number>();
+
     dataRows.forEach((row) => {
       const code = row.code
         .trim()
@@ -241,6 +243,13 @@ export function useReservationTypes() {
         nameCounts[name] =
           (nameCounts[name] || 0) + 1;
       }
+
+      if (Number.isInteger(row.displaySequence)) {
+        sequenceCounts.set(
+          row.displaySequence,
+          (sequenceCounts.get(row.displaySequence) ?? 0) + 1
+        );
+      }
     });
 
     let isValid = true;
@@ -254,6 +263,11 @@ export function useReservationTypes() {
       if (!code) {
         rowErrors.code =
           "Code is required";
+
+        isValid = false;
+      } else if (code.length > 8) {
+        rowErrors.code =
+          "Code cannot exceed 8 characters";
 
         isValid = false;
       } else if (
@@ -270,6 +284,11 @@ export function useReservationTypes() {
       if (!name) {
         rowErrors.name =
           "Name is required";
+
+        isValid = false;
+      } else if (name.length < 2) {
+        rowErrors.name =
+          "Name must be at least 2 characters";
 
         isValid = false;
       } else if (
@@ -294,10 +313,17 @@ export function useReservationTypes() {
         !Number.isInteger(
           row.displaySequence
         ) ||
-        row.displaySequence < 0
+        row.displaySequence < 1
       ) {
         rowErrors.displaySequence =
-          "Must be a valid number";
+          "Must be greater than 0";
+
+        isValid = false;
+      } else if (
+        (sequenceCounts.get(row.displaySequence) ?? 0) > 1
+      ) {
+        rowErrors.displaySequence =
+          "Display sequence must be unique";
 
         isValid = false;
       }
@@ -347,7 +373,7 @@ export function useReservationTypes() {
           "No property selected."
         );
 
-        return;
+        return false;
       }
 
       const {
@@ -362,7 +388,7 @@ export function useReservationTypes() {
           "Please fix all highlighted errors before saving."
         );
 
-        return;
+        return false;
       }
 
       try {
@@ -403,7 +429,7 @@ export function useReservationTypes() {
               "Failed to save reservation types."
           );
 
-          return;
+          return false;
         }
 
         const saved: ReservationType[] =
@@ -429,6 +455,7 @@ export function useReservationTypes() {
         alert(
           "Reservation types saved successfully!"
         );
+        return true;
       } catch (error) {
         console.error(
           "SAVE RESERVATION TYPES ERROR:",
@@ -438,6 +465,7 @@ export function useReservationTypes() {
         alert(
           "Failed to save data. Please try again."
         );
+        return false;
       } finally {
         setIsSaving(false);
       }

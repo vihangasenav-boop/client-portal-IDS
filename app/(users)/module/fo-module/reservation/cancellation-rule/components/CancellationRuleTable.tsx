@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Trash2 } from "lucide-react";
+import { handleGridPasteEvent } from "../../../grid-paste-utils";
 import {
   CancellationRule,
   CancellationRuleType,
@@ -13,29 +14,43 @@ type Props = {
   rows: CancellationRule[];
   errors: Record<number, RowErrors>;
   isLoading: boolean;
+  isLocked: boolean;
 
   onChange: (
     id: number,
     field: keyof CancellationRule,
-    value: string | number | boolean
+    value: string | number | boolean | null
   ) => void;
 
   onRemove: (id: number) => void;
 
   onSelectAll: (checked: boolean) => void;
+  onPasteGrid: (
+    startRow: number,
+    startField: string,
+    clipboardText: string
+  ) => boolean;
 };
 
 export default function CancellationRuleTable({
   rows,
   errors,
   isLoading,
+  isLocked,
   onChange,
   onRemove,
   onSelectAll,
+  onPasteGrid,
 }: Props) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table className="w-full border-separate border-spacing-0 text-sm text-black">
+      <fieldset disabled={isLocked} className="contents">
+      <table
+        className="w-full border-separate border-spacing-0 text-sm text-black"
+        onPaste={(event) =>
+          handleGridPasteEvent(event, isLocked, onPasteGrid)
+        }
+      >
         <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
           <tr>
             <th className="w-10 border-b border-slate-200 px-3 py-3">
@@ -68,11 +83,11 @@ export default function CancellationRuleTable({
             </th>
 
             <th className="w-32 border-b border-slate-200 px-3 py-3 text-left">
-              Amount
+              Amount (%) <span className="text-red-500">*</span>
             </th>
 
             <th className="w-40 border-b border-slate-200 px-3 py-3 text-left">
-              Days Before Arrival
+              Days Before Arrival <span className="text-red-500">*</span>
             </th>
 
             <th className="w-40 border-b border-slate-200 px-3 py-3 text-left">
@@ -80,7 +95,7 @@ export default function CancellationRuleTable({
             </th>
 
             <th className="w-40 border-b border-slate-200 px-3 py-3 text-left">
-              Cancel Before Time
+              Cancel Before Time <span className="text-red-500">*</span>
             </th>
 
             <th className="w-20 border-b border-slate-200 px-3 py-3">
@@ -137,6 +152,9 @@ export default function CancellationRuleTable({
                     <input
                       type="text"
                       value={row.code}
+                      maxLength={8}
+                      data-grid-row={index}
+                      data-grid-field="code"
                       title={rowErrors?.code || ""}
                       onChange={(e) =>
                         onChange(
@@ -161,6 +179,9 @@ export default function CancellationRuleTable({
                     <input
                       type="text"
                       value={row.name}
+                      minLength={2}
+                      data-grid-row={index}
+                      data-grid-field="name"
                       title={rowErrors?.name || ""}
                       onChange={(e) =>
                         onChange(
@@ -184,7 +205,10 @@ export default function CancellationRuleTable({
                   >
                     <select
                       value={row.type}
+                      required
                       title={rowErrors?.type || ""}
+                      data-grid-row={index}
+                      data-grid-field="type"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -194,6 +218,7 @@ export default function CancellationRuleTable({
                       }
                       className="min-h-[44px] w-full bg-transparent px-3 py-2 text-black outline-none transition focus:bg-white focus:ring-2 focus:ring-inset focus:ring-orange-400"
                     >
+                      <option value="">Select Type</option>
                       {CANCELLATION_RULE_TYPES.map(
                         (type) => (
                           <option
@@ -219,8 +244,12 @@ export default function CancellationRuleTable({
                     <input
                       type="number"
                       min="0"
+                      max="100"
                       step="0.01"
-                      value={row.amount}
+                      required
+                      value={row.amount ?? ""}
+                      data-grid-row={index}
+                      data-grid-field="amount"
                       title={
                         rowErrors?.amount || ""
                       }
@@ -228,9 +257,7 @@ export default function CancellationRuleTable({
                         onChange(
                           row.id,
                           "amount",
-                          Number(
-                            e.target.value
-                          )
+                          e.target.value ? Number(e.target.value) : null
                         )
                       }
                       className="min-h-[44px] w-full bg-transparent px-3 py-2 text-black outline-none transition focus:bg-white focus:ring-2 focus:ring-inset focus:ring-orange-400"
@@ -249,9 +276,13 @@ export default function CancellationRuleTable({
                     <input
                       type="number"
                       min="0"
+                      step="1"
+                      required
                       value={
-                        row.daysBeforeArrival
+                        row.daysBeforeArrival ?? ""
                       }
+                      data-grid-row={index}
+                      data-grid-field="daysBeforeArrival"
                       title={
                         rowErrors?.daysBeforeArrival ||
                         ""
@@ -260,9 +291,7 @@ export default function CancellationRuleTable({
                         onChange(
                           row.id,
                           "daysBeforeArrival",
-                          Number(
-                            e.target.value
-                          )
+                          e.target.value ? Number(e.target.value) : null
                         )
                       }
                       className="min-h-[44px] w-full bg-transparent px-3 py-2 text-black outline-none transition focus:bg-white focus:ring-2 focus:ring-inset focus:ring-orange-400"
@@ -280,10 +309,13 @@ export default function CancellationRuleTable({
                   >
                     <input
                       type="number"
-                      min="0"
+                      min="1"
+                      step="1"
                       value={
                         row.displaySequence
                       }
+                      data-grid-row={index}
+                      data-grid-field="displaySequence"
                       title={
                         rowErrors?.displaySequence ||
                         ""
@@ -312,9 +344,12 @@ export default function CancellationRuleTable({
                   >
                     <input
                       type="time"
+                      required
                       value={
                         row.cancelBeforeTime
                       }
+                      data-grid-row={index}
+                      data-grid-field="cancelBeforeTime"
                       title={
                         rowErrors?.cancelBeforeTime ||
                         ""
@@ -354,6 +389,7 @@ export default function CancellationRuleTable({
           )}
         </tbody>
       </table>
+      </fieldset>
     </div>
   );
 }

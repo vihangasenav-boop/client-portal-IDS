@@ -288,7 +288,7 @@ export async function POST(
         !Number.isInteger(row.channelGroupId) ||
         !groupIds.has(row.channelGroupId) ||
         !Number.isInteger(row.displaySequence) ||
-        row.displaySequence < 0
+        row.displaySequence < 1
       )) {
         return NextResponse.json(
           { success: false, error: "Channel rows contain invalid group, code, name, or display sequence values." },
@@ -473,6 +473,11 @@ export async function POST(
         continue;
       }
 
+      if (code.length > 8) {
+        errors.push({ index, error: "Code cannot exceed 8 characters" });
+        continue;
+      }
+
       // Name
       if (!name) {
         errors.push({
@@ -481,6 +486,11 @@ export async function POST(
             "Name is required",
         });
 
+        continue;
+      }
+
+      if (name.length < 2) {
+        errors.push({ index, error: "Name must be at least 2 characters" });
         continue;
       }
 
@@ -507,12 +517,12 @@ export async function POST(
         !Number.isInteger(
           displaySequence
         ) ||
-        displaySequence < 0
+        displaySequence < 1
       ) {
         errors.push({
           index,
           error:
-            "Display Sequence must be a non-negative integer",
+            "Display Sequence must be a positive integer",
         });
 
         continue;

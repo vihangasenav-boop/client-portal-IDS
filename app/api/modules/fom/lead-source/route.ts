@@ -203,6 +203,20 @@ export async function POST(
         );
       }
 
+      if (row.code.length > 8) {
+        return NextResponse.json(
+          { success: false, error: "Lead source code cannot exceed 8 characters." },
+          { status: 400 }
+        );
+      }
+
+      if (row.name.length < 2) {
+        return NextResponse.json(
+          { success: false, error: "Lead source name must be at least 2 characters." },
+          { status: 400 }
+        );
+      }
+
       const code = row.code.toLowerCase();
       if (codeSet.has(code)) {
         return NextResponse.json(
@@ -336,6 +350,60 @@ export async function DELETE(req: NextRequest) {
     if (req.nextUrl.searchParams.get("all") === "true") {
       const result = await prisma.leadSource.deleteMany({
         where: { propertyModuleId: propertyModule.id },
+      });
+
+      return NextResponse.json({ success: true, count: result.count });
+    }
+
+    if (!req.nextUrl.searchParams.has("id")) {
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return NextResponse.json(
+          { success: false, error: "Request body must be valid JSON." },
+          { status: 400 }
+        );
+      }
+
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        !("ids" in body) ||
+        !Array.isArray(body.ids)
+      ) {
+        return NextResponse.json(
+          { success: false, error: "Provide lead source IDs to delete." },
+          { status: 400 }
+        );
+      }
+
+      const ids = body.ids.map(Number);
+      if (
+        ids.length === 0 ||
+        ids.some((id) => !Number.isInteger(id) || id <= 0) ||
+        new Set(ids).size !== ids.length
+      ) {
+        return NextResponse.json(
+          { success: false, error: "Select valid lead source rows to delete." },
+          { status: 400 }
+        );
+      }
+
+      const matchingRows = await prisma.leadSource.findMany({
+        where: { id: { in: ids }, propertyModuleId: propertyModule.id },
+        select: { id: true },
+      });
+
+      if (matchingRows.length !== ids.length) {
+        return NextResponse.json(
+          { success: false, error: "One or more lead sources do not belong to this property." },
+          { status: 404 }
+        );
+      }
+
+      const result = await prisma.leadSource.deleteMany({
+        where: { id: { in: ids }, propertyModuleId: propertyModule.id },
       });
 
       return NextResponse.json({ success: true, count: result.count });

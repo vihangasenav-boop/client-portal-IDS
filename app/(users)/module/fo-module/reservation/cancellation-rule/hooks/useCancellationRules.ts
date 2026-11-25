@@ -8,11 +8,23 @@ import {
 
 import {
   CancellationRule,
+  CANCELLATION_RULE_TYPES,
   emptyRow,
   RowErrors,
   CancellationRuleType,
 } from "../type";
 import { createDraftId } from "../../../business-accounts/bulk-import-utils";
+
+type CancellationRuleApiRow = {
+  id: number;
+  code: string;
+  name: string;
+  type: string | null;
+  amount: number | string | null;
+  daysBeforeArrival: number | null;
+  displaySequence: number | null;
+  cancelBeforeTime: string | null;
+};
 
 export function useCancellationRules() {
   const [propertyId, setPropertyId] =
@@ -139,23 +151,17 @@ export function useCancellationRules() {
         if (cancelled) return;
 
         const loaded: CancellationRule[] =
-          (
-            data.cancellationRules ??
-            []
-          ).map(
-            (item: any) => ({
+          ((data.cancellationRules ?? []) as CancellationRuleApiRow[]).map(
+            (item) => ({
               id: item.id,
               code: item.code,
               name: item.name,
-              type: item.type as CancellationRuleType,
-              amount: Number(
-                item.amount ?? 0
-              ),
+              type: (item.type ?? "") as CancellationRuleType,
+              amount: item.amount == null ? null : Number(item.amount),
               daysBeforeArrival:
-                Number(
-                  item.daysBeforeArrival ??
-                    0
-                ),
+                item.daysBeforeArrival == null
+                  ? null
+                  : Number(item.daysBeforeArrival),
               displaySequence:
                 Number(
                   item.displaySequence ??
@@ -219,6 +225,7 @@ export function useCancellationRules() {
       string,
       number
     > = {};
+    const sequenceCounts: Record<number, number> = {};
 
     dataRows.forEach((row) => {
       const code =
@@ -242,6 +249,11 @@ export function useCancellationRules() {
           (nameCounts[name] || 0) +
           1;
       }
+
+      if (Number.isInteger(row.displaySequence) && row.displaySequence > 0) {
+        sequenceCounts[row.displaySequence] =
+          (sequenceCounts[row.displaySequence] || 0) + 1;
+      }
     });
 
     let isValid = true;
@@ -260,6 +272,10 @@ export function useCancellationRules() {
         rowErrors.code =
           "Code is required";
         isValid = false;
+      } else if (code.length > 8) {
+        rowErrors.code =
+          "Code cannot exceed 8 characters";
+        isValid = false;
       } else if (
         codeCounts[
           code.toLowerCase()
@@ -273,6 +289,10 @@ export function useCancellationRules() {
       if (!name) {
         rowErrors.name =
           "Name is required";
+        isValid = false;
+      } else if (name.length < 2) {
+        rowErrors.name =
+          "Name must be at least 2 characters";
         isValid = false;
       } else if (
         nameCounts[
@@ -288,29 +308,53 @@ export function useCancellationRules() {
         rowErrors.type =
           "Type is required";
         isValid = false;
-      }
-
-      if (
-        row.amount < 0
-      ) {
-        rowErrors.amount =
-          "Amount cannot be negative";
+      } else if (!CANCELLATION_RULE_TYPES.includes(row.type)) {
+        rowErrors.type =
+          "Select a valid cancellation rule type";
         isValid = false;
       }
 
       if (
+        row.amount === null ||
+        !Number.isFinite(row.amount) ||
+        row.amount < 0 ||
+        row.amount > 100
+      ) {
+        rowErrors.amount =
+          "Amount must be between 0 and 100 percent";
+        isValid = false;
+      }
+
+      if (
+        row.daysBeforeArrival === null ||
+        !Number.isInteger(row.daysBeforeArrival) ||
         row.daysBeforeArrival < 0
       ) {
         rowErrors.daysBeforeArrival =
-          "Days cannot be negative";
+          "Days Before Arrival is required and must be a non-negative integer";
         isValid = false;
       }
 
       if (
-        row.displaySequence < 0
+        !Number.isInteger(row.displaySequence) ||
+        row.displaySequence < 1
       ) {
         rowErrors.displaySequence =
-          "Display sequence cannot be negative";
+          "Display sequence must be a positive integer";
+        isValid = false;
+      } else if (sequenceCounts[row.displaySequence] > 1) {
+        rowErrors.displaySequence =
+          "Display sequence must be unique";
+        isValid = false;
+      }
+
+      if (!row.cancelBeforeTime.trim()) {
+        rowErrors.cancelBeforeTime =
+          "Cancel Before Time is required";
+        isValid = false;
+      } else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(row.cancelBeforeTime)) {
+        rowErrors.cancelBeforeTime =
+          "Cancel Before Time must be a valid time";
         isValid = false;
       }
 
@@ -339,7 +383,7 @@ export function useCancellationRules() {
         alert(
           "No property selected."
         );
-        return;
+        return false;
       }
 
       const {
@@ -354,7 +398,7 @@ export function useCancellationRules() {
           "Please fix all highlighted errors before saving."
         );
 
-        return;
+        return false;
       }
 
       try {
@@ -375,7 +419,7 @@ export function useCancellationRules() {
                   id: row.id,
                   code: row.code,
                   name: row.name,
-                  type: row.type,
+                  type: (row.type ?? "") as CancellationRuleType,
                   amount: row.amount,
                   daysBeforeArrival:
                     row.daysBeforeArrival,
@@ -398,19 +442,16 @@ export function useCancellationRules() {
             data?.error ||
               "Failed to save data."
           );
-          return;
+          return false;
         }
 
         const saved: CancellationRule[] =
-          (
-            data.cancellationRules ??
-            []
-          ).map(
-            (row: any) => ({
+          ((data.cancellationRules ?? []) as CancellationRuleApiRow[]).map(
+            (row) => ({
               id: row.id,
               code: row.code,
               name: row.name,
-              type: row.type,
+              type: (row.type ?? "") as CancellationRuleType,
               amount: Number(
                 row.amount ?? 0
               ),
@@ -437,12 +478,14 @@ export function useCancellationRules() {
         alert(
           "Cancellation rules saved successfully!"
         );
+        return true;
       } catch (error) {
         console.error(error);
 
         alert(
           "Failed to save data. Please try again."
         );
+        return false;
       } finally {
         setIsSaving(false);
       }

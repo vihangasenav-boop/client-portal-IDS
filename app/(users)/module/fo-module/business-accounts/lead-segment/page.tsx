@@ -1,12 +1,17 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import BulkDataTools from "../components/BulkDataTools";
 import { createDraftId, parseImportBoolean } from "../bulk-import-utils";
+import { pasteGridIntoRows } from "../../grid-paste-utils";
 import LeadSegmentTable from "./components/LeadSegmentTable";
 import { useLeadSegments } from "./hooks/useLeadSegments";
 import { LeadSegment } from "./type";
 
 export default function LeadSegmentPage() {
+  const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+  const [isTableLocked, setIsTableLocked] = useState(false);
+  const initialLoadHandled = useRef(false);
   const {
     rows,
     setRows,
@@ -18,6 +23,25 @@ export default function LeadSegmentPage() {
     loadError,
     save,
   } = useLeadSegments();
+
+  useEffect(() => {
+    if (isLoading || initialLoadHandled.current) return;
+
+    const timeoutId = window.setTimeout(() => {
+      initialLoadHandled.current = true;
+      if (rows.some((row) => row.id > 0)) {
+        setIsTableLocked(true);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isLoading, rows]);
+
+  const handleSave = async () => {
+    if (await save()) {
+      setIsTableLocked(true);
+    }
+  };
 
   // ==========================================
   // CHANGE ROW
@@ -72,40 +96,44 @@ export default function LeadSegmentPage() {
     ]);
   };
 
-  const deleteAllRows = async () => {
-    const savedCount = rows.filter((row) => row.id > 0).length;
-    if (
-      savedCount === 0 ||
-      !window.confirm(
-        `Permanently delete all ${savedCount} lead segments for this property? This cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        "/api/modules/fom/lead-segment?all=true",
-        { method: "DELETE", credentials: "include" }
-      );
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || "Could not delete all lead segments.");
-      }
-
-      setRows([{
+  const pasteIntoGrid = (
+    startRow: number,
+    startField: string,
+    clipboardText: string
+  ) =>
+    pasteGridIntoRows({
+      startRow,
+      startField,
+      clipboardText,
+      setRows,
+      columns: [
+        {
+          key: "code",
+          headers: ["Code", "Lead Segment Code"],
+          apply: (row, value) => ({ ...row, code: value }),
+        },
+        {
+          key: "name",
+          headers: ["Name", "Lead Segment Name"],
+          apply: (row, value) => ({ ...row, name: value }),
+        },
+        {
+          key: "isDefault",
+          headers: ["Is Default", "Default"],
+          apply: (row, value) => ({
+            ...row,
+            isDefault: parseImportBoolean(value),
+          }),
+        },
+      ],
+      createRow: () => ({
         id: createDraftId(),
         code: "",
         name: "",
         isDefault: false,
         selected: false,
-      }]);
-    } catch (error) {
-      console.error("Delete all lead segments failed:", error);
-      alert(error instanceof Error ? error.message : "Could not delete all lead segments.");
-    }
-  };
+      }),
+    });
 
   // ==========================================
   // REMOVE ROW
@@ -157,6 +185,41 @@ export default function LeadSegmentPage() {
     );
   };
 
+  const deleteSelectedRows = async () => {
+    const selectedRows = rows.filter((row) => row.selected);
+    if (selectedRows.length === 0) return;
+
+    if (!window.confirm(`Delete ${selectedRows.length} selected lead segment row(s)?`)) {
+      return;
+    }
+
+    const savedIds = selectedRows.flatMap((row) => row.id > 0 ? [row.id] : []);
+    const selectedIds = new Set(selectedRows.map((row) => row.id));
+    setIsDeletingSelected(true);
+
+    try {
+      if (savedIds.length > 0) {
+        const response = await fetch("/api/modules/fom/lead-segment", {
+          method: "DELETE",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: savedIds }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || "Could not delete selected lead segments.");
+        }
+      }
+
+      setRows((previous) => previous.filter((row) => !selectedIds.has(row.id)));
+    } catch (error) {
+      console.error("Delete selected lead segments failed:", error);
+      alert(error instanceof Error ? error.message : "Could not delete selected lead segments.");
+    } finally {
+      setIsDeletingSelected(false);
+    }
+  };
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -177,9 +240,14 @@ export default function LeadSegmentPage() {
           <BulkDataTools
             columns={["Code", "Name", "Is Default"]}
             templateName="lead-segments"
-            disabled={isLoading || isSaving}
-            deleteAllDisabled={!rows.some((row) => row.id > 0)}
-            onDeleteAll={deleteAllRows}
+            disabled={isLoading || isSaving || isDeletingSelected}
+            importDisabled={isTableLocked}
+            instructions={[
+              "Code is required, must be unique, and cannot exceed 8 characters.",
+              "Name is required, must be unique, and must be at least 2 characters.",
+              "Use Yes or No for Is Default.",
+              "Keep the template column headers unchanged when importing.",
+            ]}
             onImport={importRows}
           />
         </div>
@@ -199,38 +267,71 @@ export default function LeadSegmentPage() {
         onChange={handleChange}
         onRemove={removeRow}
         onSelectAll={selectAll}
+        onPasteGrid={pasteIntoGrid}
+        isLocked={isTableLocked}
       />
 
       {/* Footer */}
 
-      <div className="flex flex-wrap justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={addRow}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          disabled={isLoading || isSaving || isDeletingSelected || isTableLocked}
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           + Add Row
         </button>
 
-        <button
-          type="button"
-          onClick={save}
-          disabled={
-            isSaving ||
-            isLoading ||
-            propertyIdLoading ||
-            !propertyId
-          }
-          className="rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
-        >
-          {isSaving
-            ? "Saving..."
-            : propertyIdLoading
-              ? "Resolving property..."
-              : !propertyId
-                ? "No property selected"
-                : "Save Data"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void deleteSelectedRows()}
+            disabled={
+              isLoading ||
+              isSaving ||
+              isDeletingSelected ||
+              isTableLocked ||
+              !rows.some((row) => row.selected)
+            }
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isDeletingSelected ? "Deleting..." : "Delete selected"}
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              isTableLocked
+                ? () => setIsTableLocked(false)
+                : () => void handleSave()
+            }
+            disabled={
+              isTableLocked
+                ? false
+                : isSaving ||
+                  isDeletingSelected ||
+                  isLoading ||
+                  propertyIdLoading ||
+                  !propertyId
+            }
+            className={
+              isTableLocked
+                ? "rounded-lg border border-slate-300 bg-white px-6 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                : "rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
+            }
+          >
+            {isTableLocked
+              ? "Edit"
+              : isSaving
+                ? "Saving..."
+                : propertyIdLoading
+                  ? "Resolving property..."
+                  : !propertyId
+                    ? "No property selected"
+                    : "Save Data"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -435,6 +435,20 @@ export async function POST(
         );
       }
 
+      if (row.code.length > 8) {
+        return NextResponse.json(
+          { success: false, error: "Account type code cannot exceed 8 characters." },
+          { status: 400 }
+        );
+      }
+
+      if (row.name.length < 2) {
+        return NextResponse.json(
+          { success: false, error: "Account type name must be at least 2 characters." },
+          { status: 400 }
+        );
+      }
+
       const code = row.code.toLowerCase();
       const name = row.name.toLowerCase();
 

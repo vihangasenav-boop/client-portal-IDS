@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Trash2 } from "lucide-react";
+import { handleGridPasteEvent } from "../../../grid-paste-utils";
 import {
   Channel,
   ChannelGroup,
@@ -13,6 +14,7 @@ type Props = {
   groups: ChannelGroup[];
   errors: Record<number, RowErrors>;
   isLoading: boolean;
+  isLocked: boolean;
 
   onChange: (
     id: number,
@@ -23,6 +25,11 @@ type Props = {
   onRemove: (id: number) => void;
 
   onSelectAll: (checked: boolean) => void;
+  onPasteGrid: (
+    startRow: number,
+    startField: string,
+    clipboardText: string
+  ) => boolean;
 };
 
 export default function ChannelTable({
@@ -30,13 +37,21 @@ export default function ChannelTable({
   groups,
   errors,
   isLoading,
+  isLocked,
   onChange,
   onRemove,
   onSelectAll,
+  onPasteGrid,
 }: Props) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table className="w-full border-separate border-spacing-0 text-sm text-black">
+      <fieldset disabled={isLocked} className="contents">
+      <table
+        className="w-full border-separate border-spacing-0 text-sm text-black"
+        onPaste={(event) =>
+          handleGridPasteEvent(event, isLocked, onPasteGrid)
+        }
+      >
         <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
           <tr>
             <th className="w-10 border-b border-slate-200 px-3 py-3">
@@ -136,6 +151,9 @@ export default function ChannelTable({
                     <input
                       type="text"
                       value={row.code}
+                      maxLength={8}
+                      data-grid-row={index}
+                      data-grid-field="code"
                       title={codeError || ""}
                       onChange={(e) =>
                         onChange(
@@ -160,6 +178,9 @@ export default function ChannelTable({
                     <input
                       type="text"
                       value={row.name}
+                      minLength={2}
+                      data-grid-row={index}
+                      data-grid-field="name"
                       title={nameError || ""}
                       onChange={(e) =>
                         onChange(
@@ -186,6 +207,8 @@ export default function ChannelTable({
                         row.channelGroupId || ""
                       }
                       title={groupError || ""}
+                      data-grid-row={index}
+                      data-grid-field="channelGroupId"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -204,7 +227,7 @@ export default function ChannelTable({
                           key={group.id}
                           value={group.id}
                         >
-                          {group.code} - {group.name}
+                          {group.name}
                         </option>
                       ))}
                     </select>
@@ -221,9 +244,11 @@ export default function ChannelTable({
                   >
                     <input
                       type="number"
-                      min="0"
+                      min="1"
                       value={row.displaySequence}
                       title={sequenceError || ""}
+                      data-grid-row={index}
+                      data-grid-field="displaySequence"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -257,6 +282,7 @@ export default function ChannelTable({
           )}
         </tbody>
       </table>
+      </fieldset>
     </div>
   );
 }

@@ -5,6 +5,11 @@ import { Origin } from "./type";
 import { useOrigins } from "./hooks/useOrigins";
 import BulkDataTools from "../../business-accounts/components/BulkDataTools";
 import { createDraftId } from "../../business-accounts/bulk-import-utils";
+import { pasteGridIntoRows } from "../../grid-paste-utils";
+import {
+  useDeleteSelectedReservationRows,
+  useReservationTableLock,
+} from "../hooks/useReservationTableActions";
 
 export default function OriginPage() {
   const {
@@ -19,6 +24,15 @@ export default function OriginPage() {
     loadError,
     save,
   } = useOrigins();
+  const { isLocked, unlock, saveAndLock } =
+    useReservationTableLock(isLoading, rows, save);
+  const { isDeleting, deleteSelectedRows } =
+    useDeleteSelectedReservationRows(
+      "/api/modules/fom/origin",
+      "origin",
+      rows,
+      setRows
+    );
 
   // -----------------------------------------
   // Change
@@ -72,32 +86,35 @@ export default function OriginPage() {
     setErrors({});
   };
 
-  const deleteAllRows = async () => {
-    const savedCount = rows.filter((row) => row.id > 0).length;
-    if (
-      savedCount === 0 ||
-      !window.confirm(`Permanently delete all ${savedCount} origins for this property?`)
-    ) return;
-
-    try {
-      const response = await fetch("/api/modules/fom/origin?all=true", {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || "Could not delete all origins.");
-      setRows([{
+  const pasteIntoGrid = (
+    startRow: number,
+    startField: string,
+    clipboardText: string
+  ) =>
+    pasteGridIntoRows({
+      startRow,
+      startField,
+      clipboardText,
+      setRows,
+      columns: [
+        {
+          key: "code",
+          headers: ["Code", "Origin Code"],
+          apply: (row, value) => ({ ...row, code: value }),
+        },
+        {
+          key: "name",
+          headers: ["Name", "Origin Name"],
+          apply: (row, value) => ({ ...row, name: value }),
+        },
+      ],
+      createRow: () => ({
         id: createDraftId(),
         code: "",
         name: "",
         selected: false,
-      }]);
-      setErrors({});
-    } catch (error) {
-      console.error("Delete all origins failed:", error);
-      alert(error instanceof Error ? error.message : "Could not delete all origins.");
-    }
-  };
+      }),
+    });
 
   // -----------------------------------------
   // Remove
@@ -165,9 +182,13 @@ export default function OriginPage() {
           <BulkDataTools
             columns={["Code", "Name"]}
             templateName="origins"
-            disabled={isLoading || isSaving}
-            deleteAllDisabled={!rows.some((row) => row.id > 0)}
-            onDeleteAll={deleteAllRows}
+            disabled={isLoading || isSaving || isDeleting}
+            importDisabled={isLocked}
+            instructions={[
+              "Code is required, unique, and cannot exceed 8 characters.",
+              "Name is required, unique, and must be at least 2 characters.",
+              "Keep the Code and Name template headers unchanged.",
+            ]}
             onImport={importRows}
           />
         </div>
@@ -182,37 +203,41 @@ export default function OriginPage() {
         onChange={handleChange}
         onRemove={removeRow}
         onSelectAll={selectAll}
+        onPasteGrid={pasteIntoGrid}
+        isLocked={isLocked}
       />
 
       {/* Footer */}
-      <div className="flex flex-wrap justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={addRow}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          disabled={isLocked || isLoading || isSaving || isDeleting}
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           + Add Row
         </button>
 
-        <button
-          type="button"
-          onClick={save}
-          disabled={
-            isSaving ||
-            isLoading ||
-            propertyIdLoading ||
-            !propertyId
-          }
-          className="rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
-        >
-          {isSaving
-            ? "Saving..."
-            : propertyIdLoading
-            ? "Resolving property..."
-            : !propertyId
-            ? "No property selected"
-            : "Save Data"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void deleteSelectedRows()}
+            disabled={isLocked || isLoading || isSaving || isDeleting || !rows.some((row) => row.selected)}
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isDeleting ? "Deleting..." : "Delete selected"}
+          </button>
+          <button
+            type="button"
+            onClick={isLocked ? unlock : () => void saveAndLock()}
+            disabled={!isLocked && (isSaving || isLoading || propertyIdLoading || !propertyId || isDeleting)}
+            className={isLocked
+              ? "rounded-lg border border-slate-300 bg-white px-6 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              : "rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"}
+          >
+            {isLocked ? "Edit" : isSaving ? "Saving..." : propertyIdLoading ? "Resolving property..." : !propertyId ? "No property selected" : "Save Data"}
+          </button>
+        </div>
       </div>
     </div>
   );

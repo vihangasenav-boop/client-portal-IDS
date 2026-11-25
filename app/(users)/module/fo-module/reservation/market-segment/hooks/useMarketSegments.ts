@@ -206,6 +206,11 @@ export function useMarketSegments() {
       if (!row.code.trim()) {
         rowErrors.code =
           "Code is required";
+        isValid = false;
+      } else if (row.code.trim().length > 8) {
+        rowErrors.code =
+          "Code cannot exceed 8 characters";
+        isValid = false;
       } else if (
         codeCounts[
           row.code.trim().toLowerCase()
@@ -213,26 +218,34 @@ export function useMarketSegments() {
       ) {
         rowErrors.code =
           "Code must be unique";
+        isValid = false;
       }
 
       if (!row.name.trim()) {
         rowErrors.name =
           "Name is required";
+        isValid = false;
+      } else if (row.name.trim().length < 2) {
+        rowErrors.name =
+          "Name must be at least 2 characters";
+        isValid = false;
       }
 
       if (!row.marketSegmentGroupId) {
         rowErrors.marketSegmentGroupId =
           "Market Segment Group is required";
+        isValid = false;
       }
 
       if (
         !Number.isInteger(
           row.displaySequence
         ) ||
-        row.displaySequence < 0
+        row.displaySequence < 1
       ) {
         rowErrors.displaySequence =
-          "Invalid display sequence";
+          "Display sequence must be greater than 0";
+        isValid = false;
       }
 
       if (
@@ -263,7 +276,7 @@ export function useMarketSegments() {
   const save = useCallback(async () => {
     if (!propertyId) {
       alert("No property selected.");
-      return;
+      return false;
     }
 
     const {
@@ -278,7 +291,7 @@ export function useMarketSegments() {
         "Please fix all highlighted errors."
       );
 
-      return;
+      return false;
     }
 
     try {
@@ -315,7 +328,7 @@ export function useMarketSegments() {
             "Failed to save market segments"
         );
 
-        return;
+        return false;
       }
 
       const saved =
@@ -338,12 +351,14 @@ export function useMarketSegments() {
       alert(
         "Market segments saved successfully!"
       );
+      return true;
     } catch (error) {
       console.error(error);
 
       alert(
         "Failed to save market segments."
       );
+      return false;
     } finally {
       setIsSaving(false);
     }

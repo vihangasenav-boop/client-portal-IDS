@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
             !row.name ||
             !validGroups.has(row.group) ||
             !Number.isInteger(row.displaySequence) ||
-            row.displaySequence < 0
+            row.displaySequence < 1
         )
       ) {
         return NextResponse.json(
@@ -189,7 +189,13 @@ export async function POST(req: NextRequest) {
 
       const existingRows = await prisma.reservationType.findMany({
         where: { propertyModuleId: propertyModule.id },
-        select: { id: true, code: true, name: true, isDefault: true },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          isDefault: true,
+          displaySequence: true,
+        },
       });
       const existingIds = new Set(existingRows.map((row) => row.id));
       const incomingIds = new Set(rows.flatMap((row) => row.id ? [row.id] : []));
@@ -204,7 +210,16 @@ export async function POST(req: NextRequest) {
       }
 
       const codes = new Set<string>();
+      const displaySequences = new Set<number>();
       for (const row of rows) {
+        if (displaySequences.has(row.displaySequence)) {
+          return NextResponse.json(
+            { success: false, error: "Reservation type display sequences must be unique." },
+            { status: 409 }
+          );
+        }
+        displaySequences.add(row.displaySequence);
+
         const code = row.code.toLowerCase();
         if (codes.has(code)) {
           return NextResponse.json(
@@ -222,6 +237,22 @@ export async function POST(req: NextRequest) {
         if (duplicate) {
           return NextResponse.json(
             { success: false, error: `Reservation type code "${row.code}" already exists.` },
+            { status: 409 }
+          );
+        }
+
+        const duplicateSequence = existingRows.find(
+          (existing) =>
+            existing.id !== row.id &&
+            !incomingIds.has(existing.id) &&
+            existing.displaySequence === row.displaySequence
+        );
+        if (duplicateSequence) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: `Reservation type display sequence ${row.displaySequence} is already in use.`,
+            },
             { status: 409 }
           );
         }
@@ -285,6 +316,7 @@ export async function POST(req: NextRequest) {
     }[] = [];
 
     const codeSet = new Set<string>();
+    const displaySequenceSet = new Set<number>();
 
     for (let index = 0; index < body.rows.length; index++) {
       const row = body.rows[index];
@@ -313,11 +345,21 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      if (code.length > 8) {
+        errors.push({ index, error: "Code cannot exceed 8 characters" });
+        continue;
+      }
+
       if (!name) {
         errors.push({
           index,
           error: "Name is required",
         });
+        continue;
+      }
+
+      if (name.length < 2) {
+        errors.push({ index, error: "Name must be at least 2 characters" });
         continue;
       }
 
@@ -331,15 +373,25 @@ export async function POST(req: NextRequest) {
 
       if (
         !Number.isInteger(displaySequence) ||
-        displaySequence < 0
+        displaySequence < 1
       ) {
         errors.push({
           index,
           error:
-            "Display sequence must be a valid integer",
+            "Display sequence must be a positive integer",
         });
         continue;
       }
+
+      if (displaySequenceSet.has(displaySequence)) {
+        errors.push({
+          index,
+          error: "Display sequence must be unique",
+        });
+        continue;
+      }
+
+      displaySequenceSet.add(displaySequence);
 
       const normalizedCode =
         code.toLowerCase();
@@ -397,6 +449,32 @@ export async function POST(req: NextRequest) {
           error:
             "One or more reservation type codes already exist",
           existing,
+        },
+        { status: 409 }
+      );
+    }
+
+    const existingSequences =
+      await prisma.reservationType.findMany({
+        where: {
+          propertyModuleId: propertyModule.id,
+          displaySequence: {
+            in: body.rows.map((row: any) =>
+              Number(row.displaySequence)
+            ),
+          },
+        },
+        select: {
+          displaySequence: true,
+        },
+      });
+
+    if (existingSequences.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "One or more reservation type display sequences are already in use.",
+          existingSequences,
         },
         { status: 409 }
       );

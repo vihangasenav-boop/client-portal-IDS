@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BulkDataTools from "../components/BulkDataTools";
 import { createDraftId, parseImportBoolean } from "../bulk-import-utils";
+import { pasteGridIntoRows } from "../../grid-paste-utils";
 import AccountTypeTable from "./components/AccountTypeTable";
 import { useAccountTypes } from "./hooks/useAccountTypes";
 import { AccountType } from "./type";
@@ -10,6 +11,8 @@ import { AccountType } from "./type";
 
 export default function AccountTypePage() {
   const [isDeletingSelected, setIsDeletingSelected] = useState(false);
+  const [isTableLocked, setIsTableLocked] = useState(false);
+  const initialLoadHandled = useRef(false);
   const {
     rows,
     setRows,
@@ -21,6 +24,26 @@ export default function AccountTypePage() {
     loadError,
     save,
   } = useAccountTypes();
+
+  useEffect(() => {
+    if (isLoading || initialLoadHandled.current) return;
+
+    const timeoutId = window.setTimeout(() => {
+      initialLoadHandled.current = true;
+      if (rows.some((row) => row.id > 0)) {
+        setIsTableLocked(true);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isLoading, rows]);
+
+  const handleSave = async () => {
+    const saved = await save();
+    if (saved) {
+      setIsTableLocked(true);
+    }
+  };
 
   // -----------------------------------------
   // Change row
@@ -77,105 +100,42 @@ export default function AccountTypePage() {
 
   const pasteIntoGrid = (
     startRow: number,
-    startField: "code" | "name" | "isDefault",
+    startField: string,
     clipboardText: string
   ) => {
-    if (!clipboardText.includes("\t") && !/[\r\n]/.test(clipboardText)) {
-      return false;
-    }
-
-    let matrix = clipboardText
-      .split(/\r\n|\n|\r/)
-      .map((line) => line.split("\t").map((cell) => cell.trim()))
-      .filter((row) => row.some(Boolean));
-
-    if (matrix.length === 0) return true;
-
-    const normalizeHeader = (value: string) =>
-      value
-        .replace(/^\uFEFF/, "")
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "");
-    const header = matrix[0].map(normalizeHeader);
-    const codeIndex = header.findIndex((value) =>
-      ["code", "accounttypecode"].includes(value)
-    );
-    const nameIndex = header.findIndex((value) =>
-      ["name", "accounttypename"].includes(value)
-    );
-    const defaultIndex = header.findIndex((value) =>
-      ["isdefault", "default"].includes(value)
-    );
-    const hasHeader = [codeIndex, nameIndex, defaultIndex].filter(
-      (index) => index >= 0
-    ).length >= 2;
-
-    let fields: Array<"code" | "name" | "isDefault">;
-    if (hasHeader) {
-      const sourceIndexes = [codeIndex, nameIndex, defaultIndex];
-      fields = ["code", "name", "isDefault"];
-      matrix = matrix.slice(1).map((row) =>
-        sourceIndexes.map((index) => (index >= 0 ? row[index] ?? "" : ""))
-      );
-    } else {
-      while (matrix.length > 0 && matrix.every((row) => !row[0])) {
-        matrix = matrix.map((row) => row.slice(1));
-      }
-
-      if (
-        (matrix[0]?.length ?? 0) > 3 &&
-        matrix.every((row, index) => row[0] === String(index + 1))
-      ) {
-        matrix = matrix.map((row) => row.slice(1));
-      }
-
-      const fieldOrder = ["code", "name", "isDefault"] as const;
-      fields = fieldOrder.slice(fieldOrder.indexOf(startField));
-    }
-
-    if (matrix.length === 0) return true;
-
-    const fieldOffset = hasHeader
-      ? 0
-      : (["code", "name", "isDefault"] as const).indexOf(startField);
-    setRows((previous) => {
-      const next = [...previous];
-      matrix.forEach((cells, rowOffset) => {
-        const targetIndex = startRow + rowOffset;
-        const existing = next[targetIndex] ?? {
-          id: createDraftId(),
-          code: "",
-          name: "",
-          isDefault: false,
-          selected: false,
-        };
-        const updated = { ...existing };
-
-        const pastedFieldCount = hasHeader
-          ? fields.length
-          : Math.min(fields.length, Math.max(0, cells.length - fieldOffset));
-        fields.slice(0, pastedFieldCount).forEach((field, cellIndex) => {
-          const targetField = hasHeader
-            ? field
-            : fields[cellIndex];
-          const sourceIndex = hasHeader
-            ? cellIndex
-            : fieldOffset + cellIndex;
-          const value = cells[sourceIndex] ?? "";
-          if (targetField === "isDefault") {
-            updated.isDefault = parseImportBoolean(value);
-          } else {
-            updated[targetField] = value;
-          }
-        });
-
-        next[targetIndex] = updated;
-      });
-      return next;
+    return pasteGridIntoRows({
+      startRow,
+      startField,
+      clipboardText,
+      setRows,
+      columns: [
+        {
+          key: "code",
+          headers: ["Code", "Account Type Code"],
+          apply: (row, value) => ({ ...row, code: value }),
+        },
+        {
+          key: "name",
+          headers: ["Name", "Account Type Name"],
+          apply: (row, value) => ({ ...row, name: value }),
+        },
+        {
+          key: "isDefault",
+          headers: ["Is Default", "Default"],
+          apply: (row, value) => ({
+            ...row,
+            isDefault: parseImportBoolean(value),
+          }),
+        },
+      ],
+      createRow: () => ({
+        id: createDraftId(),
+        code: "",
+        name: "",
+        isDefault: false,
+        selected: false,
+      }),
     });
-
-    return true;
   };
 
   // -----------------------------------------
@@ -295,8 +255,13 @@ export default function AccountTypePage() {
             columns={["Code", "Name", "Is Default"]}
             templateName="account-types"
             disabled={isLoading || isSaving || isDeletingSelected}
-            deleteSelectedDisabled={!rows.some((row) => row.selected)}
-            onDeleteSelected={() => void deleteSelectedRows()}
+            importDisabled={isTableLocked}
+            instructions={[
+              "Code is required, must be unique, and cannot exceed 8 characters.",
+              "Name is required, must be unique, and must be at least 2 characters.",
+              "Use Yes or No for Is Default.",
+              "Keep the template column headers unchanged when importing.",
+            ]}
             onImport={importRows}
           />
         </div>
@@ -316,40 +281,69 @@ export default function AccountTypePage() {
         onRemove={removeRow}
         onSelectAll={selectAll}
         onPasteGrid={pasteIntoGrid}
+        isLocked={isTableLocked}
       />
 
       {/* Footer */}
-      <div className="flex flex-wrap justify-between gap-3">
-
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={addRow}
-          disabled={isLoading || isSaving || isDeletingSelected}
+          disabled={isLoading || isSaving || isDeletingSelected || isTableLocked}
           className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           + Add Row
         </button>
 
-        <button
-          type="button"
-          onClick={save}
-          disabled={
-            isSaving ||
-            isDeletingSelected ||
-            isLoading ||
-            propertyIdLoading ||
-            !propertyId
-          }
-          className="rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
-        >
-          {isSaving
-            ? "Saving..."
-            : propertyIdLoading
-              ? "Resolving property..."
-              : !propertyId
-                ? "No property selected"
-                : "Save Data"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void deleteSelectedRows()}
+            disabled={
+              isLoading ||
+              isSaving ||
+              isDeletingSelected ||
+              isTableLocked ||
+              !rows.some((row) => row.selected)
+            }
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isDeletingSelected ? "Deleting..." : "Delete selected"}
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              isTableLocked
+                ? () => setIsTableLocked(false)
+                : () => void handleSave()
+            }
+            disabled={
+              isTableLocked
+                ? false
+                : isSaving ||
+                  isDeletingSelected ||
+                  isLoading ||
+                  propertyIdLoading ||
+                  !propertyId
+            }
+            className={
+              isTableLocked
+                ? "rounded-lg border border-slate-300 bg-white px-6 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                : "rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
+            }
+          >
+            {isTableLocked
+              ? "Edit"
+              : isSaving
+                ? "Saving..."
+                : propertyIdLoading
+                  ? "Resolving property..."
+                  : !propertyId
+                    ? "No property selected"
+                    : "Save Data"}
+          </button>
+        </div>
 
       </div>
     </div>

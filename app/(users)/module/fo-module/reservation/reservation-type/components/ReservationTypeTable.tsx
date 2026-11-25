@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Trash2 } from "lucide-react";
+import { handleGridPasteEvent } from "../../../grid-paste-utils";
 import {
   ReservationType,
   RowErrors,
@@ -11,6 +12,7 @@ type Props = {
   rows: ReservationType[];
   errors: Record<number, RowErrors>;
   isLoading: boolean;
+  isLocked: boolean;
 
   onChange: (
     id: number,
@@ -21,19 +23,32 @@ type Props = {
   onRemove: (id: number) => void;
 
   onSelectAll: (checked: boolean) => void;
+  onPasteGrid: (
+    startRow: number,
+    startField: string,
+    clipboardText: string
+  ) => boolean;
 };
 
 export default function ReservationTypeTable({
   rows,
   errors,
   isLoading,
+  isLocked,
   onChange,
   onRemove,
   onSelectAll,
+  onPasteGrid,
 }: Props) {
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table className="w-full border-separate border-spacing-0 text-sm text-black">
+      <fieldset disabled={isLocked} className="contents">
+      <table
+        className="w-full border-separate border-spacing-0 text-sm text-black"
+        onPaste={(event) =>
+          handleGridPasteEvent(event, isLocked, onPasteGrid)
+        }
+      >
         <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
           <tr>
             {/* Select */}
@@ -145,7 +160,10 @@ export default function ReservationTypeTable({
                     <input
                       type="text"
                       value={row.code}
+                      maxLength={8}
                       title={rowErrors.code || ""}
+                      data-grid-row={index}
+                      data-grid-field="code"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -169,7 +187,10 @@ export default function ReservationTypeTable({
                     <input
                       type="text"
                       value={row.name}
+                      minLength={2}
                       title={rowErrors.name || ""}
+                      data-grid-row={index}
+                      data-grid-field="name"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -193,6 +214,8 @@ export default function ReservationTypeTable({
                     <select
                       value={row.group}
                       title={rowErrors.group || ""}
+                      data-grid-row={index}
+                      data-grid-field="group"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -202,6 +225,9 @@ export default function ReservationTypeTable({
                       }
                       className="min-h-[44px] w-full bg-transparent px-3 py-2 text-black outline-none transition focus:bg-white focus:ring-2 focus:ring-inset focus:ring-orange-400"
                     >
+                      <option value="">
+                        Select Group
+                      </option>
                       <option value="WAITLIST">
                         Waitlist
                       </option>
@@ -227,12 +253,14 @@ export default function ReservationTypeTable({
                   >
                     <input
                       type="number"
-                      min={0}
+                      min={1}
                       value={row.displaySequence}
                       title={
                         rowErrors.displaySequence ||
                         ""
                       }
+                      data-grid-row={index}
+                      data-grid-field="displaySequence"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -255,6 +283,8 @@ export default function ReservationTypeTable({
                           ? "Yes"
                           : "No"
                       }
+                      data-grid-row={index}
+                      data-grid-field="isDefault"
                       onChange={(e) =>
                         onChange(
                           row.id,
@@ -296,6 +326,7 @@ export default function ReservationTypeTable({
           )}
         </tbody>
       </table>
+      </fieldset>
     </div>
   );
 }

@@ -7,6 +7,11 @@ import { useMarketSegments } from "./hooks/useMarketSegments";
 import MarketSegmentTable from "./components/MarketSegmentTable";
 import BulkDataTools from "../../business-accounts/components/BulkDataTools";
 import { createDraftId } from "../../business-accounts/bulk-import-utils";
+import { pasteGridIntoRows } from "../../grid-paste-utils";
+import {
+  useDeleteSelectedReservationRows,
+  useReservationTableLock,
+} from "../hooks/useReservationTableActions";
 
 export default function MarketSegmentPage() {
   const {
@@ -22,6 +27,15 @@ export default function MarketSegmentPage() {
     loadError,
     save,
   } = useMarketSegments();
+  const { isLocked, unlock, saveAndLock } =
+    useReservationTableLock(isLoading, rows, save);
+  const { isDeleting, deleteSelectedRows } =
+    useDeleteSelectedReservationRows(
+      "/api/modules/fom/market-segment",
+      "market segment",
+      rows,
+      setRows
+    );
 
   const handleChange = (
     id: number,
@@ -48,7 +62,8 @@ export default function MarketSegmentPage() {
         code: "",
         name: "",
         marketSegmentGroupId: 0,
-        displaySequence: 0,
+        displaySequence:
+          Math.max(0, ...previous.map((row) => row.displaySequence)) + 1,
         selected: false,
       },
     ]);
@@ -72,7 +87,7 @@ export default function MarketSegmentPage() {
         marketSegmentGroupId: group.id,
         displaySequence: displaySequence?.trim()
           ? Number(displaySequence)
-          : rows.length + index,
+          : rows.length + index + 1,
         selected: false,
       });
     }
@@ -84,34 +99,66 @@ export default function MarketSegmentPage() {
     setErrors({});
   };
 
-  const deleteAllRows = async () => {
-    const savedCount = rows.filter((row) => row.id > 0).length;
-    if (
-      savedCount === 0 ||
-      !window.confirm(`Permanently delete all ${savedCount} market segments for this property?`)
-    ) return;
-
-    try {
-      const response = await fetch("/api/modules/fom/market-segment?all=true", {
-        method: "DELETE",
-        credentials: "include",
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.error || "Could not delete all market segments.");
-      setRows([{
+  const pasteIntoGrid = (
+    startRow: number,
+    startField: string,
+    clipboardText: string
+  ) =>
+    pasteGridIntoRows({
+      startRow,
+      startField,
+      clipboardText,
+      setRows,
+      columns: [
+        {
+          key: "code",
+          headers: ["Code", "Market Segment Code"],
+          apply: (row, value) => ({ ...row, code: value }),
+        },
+        {
+          key: "name",
+          headers: ["Name", "Market Segment Name"],
+          apply: (row, value) => ({ ...row, name: value }),
+        },
+        {
+          key: "marketSegmentGroupId",
+          headers: [
+            "Market Segment Group",
+            "Market Segment Group Code",
+            "Market Segment Group Name",
+          ],
+          apply: (row, value) => {
+            const normalizedValue = value.trim().toLowerCase();
+            const group = groups.find(
+              (option) =>
+                option.code.trim().toLowerCase() === normalizedValue ||
+                option.name.trim().toLowerCase() === normalizedValue
+            );
+            return {
+              ...row,
+              marketSegmentGroupId: group?.id ?? 0,
+            };
+          },
+        },
+        {
+          key: "displaySequence",
+          headers: ["Display Sequence", "Sequence"],
+          apply: (row, value) => ({
+            ...row,
+            displaySequence: Number(value),
+          }),
+        },
+      ],
+      createRow: (existingRows) => ({
         id: createDraftId(),
         code: "",
         name: "",
         marketSegmentGroupId: 0,
-        displaySequence: 0,
+        displaySequence:
+          Math.max(0, ...existingRows.map((row) => row.displaySequence)) + 1,
         selected: false,
-      }]);
-      setErrors({});
-    } catch (error) {
-      console.error("Delete all market segments failed:", error);
-      alert(error instanceof Error ? error.message : "Could not delete all market segments.");
-    }
-  };
+      }),
+    });
 
   const removeRow = async (id: number) => {
     const row = rows.find((item) => item.id === id);
@@ -140,7 +187,7 @@ export default function MarketSegmentPage() {
         code: "",
         name: "",
         marketSegmentGroupId: 0,
-        displaySequence: 0,
+        displaySequence: 1,
         selected: false,
       }];
     });
@@ -168,9 +215,14 @@ export default function MarketSegmentPage() {
           <BulkDataTools
             columns={["Code", "Name", "Market Segment Group Code", "Display Sequence"]}
             templateName="market-segments"
-            disabled={isLoading || isSaving}
-            deleteAllDisabled={!rows.some((row) => row.id > 0)}
-            onDeleteAll={deleteAllRows}
+            disabled={isLoading || isSaving || isDeleting}
+            importDisabled={isLocked}
+            instructions={[
+              "Code is required, unique, and cannot exceed 8 characters.",
+              "Name is required and must be at least 2 characters.",
+              "Enter an existing Market Segment Group Code.",
+              "Keep the template column headers unchanged.",
+            ]}
             onImport={importRows}
           />
         </div>
@@ -185,36 +237,48 @@ export default function MarketSegmentPage() {
         onChange={handleChange}
         onRemove={removeRow}
         onSelectAll={selectAll}
+        onPasteGrid={pasteIntoGrid}
+        isLocked={isLocked}
       />
 
-      <div className="flex flex-wrap justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={addRow}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          disabled={isLocked || isLoading || isSaving || isDeleting}
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           + Add Row
         </button>
 
-        <button
-          type="button"
-          onClick={save}
-          disabled={
-            isSaving ||
-            isLoading ||
-            propertyIdLoading ||
-            !propertyId
-          }
-          className="rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"
-        >
-          {isSaving
-            ? "Saving..."
-            : propertyIdLoading
-              ? "Resolving property..."
-              : !propertyId
-                ? "No property selected"
-                : "Save Data"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => void deleteSelectedRows()}
+            disabled={isLocked || isLoading || isSaving || isDeleting || !rows.some((row) => row.selected)}
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-800 shadow-sm hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isDeleting ? "Deleting..." : "Delete selected"}
+          </button>
+          <button
+            type="button"
+            onClick={isLocked ? unlock : () => void saveAndLock()}
+            disabled={!isLocked && (isSaving || isLoading || propertyIdLoading || !propertyId || isDeleting)}
+            className={isLocked
+              ? "rounded-lg border border-slate-300 bg-white px-6 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              : "rounded-lg bg-orange-600 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700 disabled:opacity-50"}
+          >
+            {isLocked
+              ? "Edit"
+              : isSaving
+                ? "Saving..."
+                : propertyIdLoading
+                  ? "Resolving property..."
+                  : !propertyId
+                    ? "No property selected"
+                    : "Save Data"}
+          </button>
+        </div>
       </div>
     </div>
   );

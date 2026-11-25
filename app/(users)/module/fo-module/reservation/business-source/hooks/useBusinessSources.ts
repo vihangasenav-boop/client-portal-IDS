@@ -26,9 +26,9 @@ export function useBusinessSources() {
   const [rows, setRows] = useState<
     BusinessSource[]
   >([
-    emptyRow(createDraftId()),
-    emptyRow(createDraftId()),
-    emptyRow(createDraftId()),
+    emptyRow(createDraftId(), 1),
+    emptyRow(createDraftId(), 2),
+    emptyRow(createDraftId(), 3),
   ]);
 
   const [groups, setGroups] =
@@ -272,6 +272,9 @@ export function useBusinessSources() {
       if (!code) {
         rowErrors.code =
           "Code is required";
+      } else if (code.length > 8) {
+        rowErrors.code =
+          "Code cannot exceed 8 characters";
       } else if (
         codeCounts[
           code.toLowerCase()
@@ -284,6 +287,9 @@ export function useBusinessSources() {
       if (!name) {
         rowErrors.name =
           "Name is required";
+      } else if (name.length < 2) {
+        rowErrors.name =
+          "Name must be at least 2 characters";
       }
 
       if (
@@ -297,10 +303,10 @@ export function useBusinessSources() {
         !Number.isInteger(
           row.displaySequence
         ) ||
-        row.displaySequence < 0
+        row.displaySequence < 1
       ) {
         rowErrors.displaySequence =
-          "Invalid display sequence";
+          "Display sequence must be greater than 0";
       }
 
       if (
@@ -330,7 +336,7 @@ export function useBusinessSources() {
         alert(
           "No property selected."
         );
-        return;
+        return false;
       }
 
       const {
@@ -345,7 +351,7 @@ export function useBusinessSources() {
           "Please fix all highlighted errors before saving."
         );
 
-        return;
+        return false;
       }
 
       try {
@@ -385,7 +391,7 @@ export function useBusinessSources() {
               "Failed to save data."
           );
 
-          return;
+          return false;
         }
 
         const saved: BusinessSource[] =
@@ -412,12 +418,14 @@ export function useBusinessSources() {
         alert(
           "Business sources saved successfully!"
         );
+        return true;
       } catch (error) {
         console.error(error);
 
         alert(
           "Failed to save data. Please try again."
         );
+        return false;
       } finally {
         setIsSaving(false);
       }
